@@ -2011,8 +2011,13 @@ size_t ggml_type_size(enum ggml_type type) {
     return type_traits[type].type_size;
 }
 
-float ggml_type_sizef(enum ggml_type type) {
-    return ((float)(type_traits[type].type_size))/type_traits[type].blck_size;
+size_t ggml_row_size(enum ggml_type type, int64_t ne) {
+    assert(ne % ggml_blck_size(type) == 0);
+    return ggml_type_size(type)*ne/ggml_blck_size(type);
+}
+
+double ggml_type_sizef(enum ggml_type type) {
+    return ((double)(type_traits[type].type_size))/type_traits[type].blck_size;
 }
 
 const char * ggml_type_name(enum ggml_type type) {
@@ -7759,10 +7764,10 @@ static void ggml_compute_forward_mul_f32(
     const int ith = params->ith;
     const int nth = params->nth;
 
-// TODO: OpenCL kernel support broadcast
 #ifdef GGML_USE_CLBLAST
     if (src1->backend == GGML_BACKEND_GPU) {
-        GGML_ASSERT(ggml_are_same_shape(src0, src1));
+        // TODO: OpenCL kernel support full broadcast
+        GGML_ASSERT(ggml_can_repeat_rows(src1, src0));
         if (ith == 0) {
             ggml_cl_mul(src0, src1, dst);
         }
