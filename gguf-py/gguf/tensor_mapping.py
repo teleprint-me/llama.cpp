@@ -174,6 +174,7 @@ class TensorNameMap:
         MODEL_TENSOR.FFN_GATE_INP: (
             "layers.{bid}.feed_forward.gate",           # mixtral
             "model.layers.{bid}.block_sparse_moe.gate", # mixtral
+            "transformer.h.{bid}.moe.gate",             # phixtral
         ),
 
         # Feed-forward up
@@ -199,6 +200,7 @@ class TensorNameMap:
         MODEL_TENSOR.FFN_UP_EXP: (
             "layers.{bid}.feed_forward.experts.{xid}.w3",           # mixtral
             "model.layers.{bid}.block_sparse_moe.experts.{xid}.w3", # mixtral
+            "transformer.h.{bid}.moe.mlp.{xid}.fc1",                # phixtral
         ),
 
         # AWQ-activation gate
@@ -241,6 +243,7 @@ class TensorNameMap:
         MODEL_TENSOR.FFN_DOWN_EXP: (
             "layers.{bid}.feed_forward.experts.{xid}.w2",           # mixtral
             "model.layers.{bid}.block_sparse_moe.experts.{xid}.w2", # mixtral
+            "transformer.h.{bid}.moe.mlp.{xid}.fc2",                # phixtral
         ),
 
         MODEL_TENSOR.ATTN_Q_NORM: (
