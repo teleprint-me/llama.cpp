@@ -2657,7 +2657,6 @@ struct llama_context {
     llama_context(const llama_model & model)
         : model(model)
         , sampling(llama_n_vocab(&model))
-        , grammar()
         , t_start_us(model.t_start_us)
         , t_load_us(model.t_load_us) {}
 
@@ -2675,7 +2674,6 @@ struct llama_context {
 
     struct llama_cparams        cparams;
     struct llama_sampling       sampling;
-    struct llama_grammar        grammar;
     struct llama_kv_cache       kv_self;
     struct llama_control_vector cvec;
 
@@ -2907,7 +2905,7 @@ static size_t llama_get_device_memory(const llama_model & model, int device) {
 #elif defined(GGML_USE_CANN)
     size_t total;
     size_t free;
-    ggml_backend_cann_get_device_memory(device, &total, &free);
+    ggml_backend_cann_get_device_memory(device, &free, &total);
     return free;
 #else
     return 1;
@@ -14048,7 +14046,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
                             f = -INFINITY;
                         } else {
                             if (hparams.use_alibi) {
-                                f = -fabs(lctx.kv_self.cells[i].pos - pos);
+                                f = -std::abs(lctx.kv_self.cells[i].pos - pos);
                             } else {
                                 f = 0.0f;
                             }
@@ -14102,7 +14100,7 @@ static void llama_set_inputs(llama_context & lctx, const llama_batch & batch) {
                         for (int s = 0; s < batch.n_seq_id[i]; ++s) {
                             if (batch.seq_id[i][s] == seq_id) {
                                 if (hparams.use_alibi) {
-                                    f = -fabs(batch.pos[i] - batch.pos[j]);
+                                    f = -std::abs(batch.pos[i] - batch.pos[j]);
                                 } else {
                                     f = 0.0f;
                                 }
@@ -16643,9 +16641,7 @@ struct llama_context * llama_new_context_with_model(
             for (int i = 0; i < ggml_backend_sycl_get_device_count(); ++i) {
                 ggml_backend_t backend = ggml_backend_sycl_init(i);
                 if (backend == nullptr) {
-                    int id_list[GGML_SYCL_MAX_DEVICES];
-                    ggml_sycl_get_gpu_list(id_list, GGML_SYCL_MAX_DEVICES);
-                    LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d (index %d) backend\n", __func__, id_list[i], i);
+                    LLAMA_LOG_ERROR("%s: failed to initialize SYCL%d for No.%d backend\n", __func__, i, i);
                     llama_free(ctx);
                     return nullptr;
                 }
@@ -16833,10 +16829,6 @@ const struct llama_model * llama_get_model(const struct llama_context * ctx) {
 
 const struct llama_vocab * llama_get_vocab(const struct llama_context * ctx) {
     return &ctx->model.vocab;
-}
-
-struct llama_grammar * llama_get_grammar(struct llama_context * ctx) {
-    return &ctx->grammar;
 }
 
 uint32_t llama_n_ctx(const struct llama_context * ctx) {
@@ -19146,11 +19138,7 @@ const char * llama_print_system_info(void) {
     s += "SSSE3 = "       + std::to_string(ggml_cpu_has_ssse3())       + " | ";
     s += "VSX = "         + std::to_string(ggml_cpu_has_vsx())         + " | ";
     s += "MATMUL_INT8 = " + std::to_string(ggml_cpu_has_matmul_int8()) + " | ";
-#ifdef GGML_USE_LLAMAFILE
-    s += "LLAMAFILE = 1 | ";
-#else
-    s += "LLAMAFILE = 0 | ";
-#endif
+    s += "LLAMAFILE = "   + std::to_string(ggml_cpu_has_llamafile())   + " | ";
 
     return s.c_str();
 }
