@@ -40,4 +40,9 @@
     },
     "isort.path": [],
     "isort.check": false,
+    "files.associations": {
+        "*.tcss": "jinja-css",
+        "*.h": "c",
+        "cstdlib": "cpp"
+    },
 }
