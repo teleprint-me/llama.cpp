@@ -1,5 +1,12 @@
 {
     "editor.formatOnSave": false,
+    "editor.defaultFormatter": null,
+    "editor.stickyTabStops": true,
+    "editor.tabCompletion": "on",
+    "editor.wordWrap": "on",
+    "editor.fontSize": 12,
+    "editor.lightbulb.enabled": "off",
+    "editor.fontFamily": "'Noto Sans Mono', 'Source Code Pro', 'Droid Sans Mono'",
     "[python]": {
         "diffEditor.ignoreTrimWhitespace": true,
         "editor.formatOnType": false,
@@ -8,6 +15,28 @@
             "source.organizeImports": "never"
         },
     },
+    "[makefile]": {
+        "editor.defaultFormatter": "vscode.markdown-language-features",
+        "editor.tabSize": 4,
+        "editor.formatOnSave": false,
+        "editor.insertSpaces": false,
+        "editor.formatOnPaste": false,
+        "editor.formatOnType": false,
+        "editor.trimAutoWhitespace": true,
+        "editor.codeActionsOnSave": {
+            "source.fixAll": "explicit"
+        }
+    },
+    "[c]": {
+        "editor.tabSize": 4,
+        "editor.formatOnSave": false,
+        "editor.insertSpaces": true
+    },
+    "[cpp]": {
+        "editor.tabSize": 4,
+        "editor.formatOnSave": false,
+        "editor.insertSpaces": true
+    },
     "isort.path": [],
-    "isort.check": false
+    "isort.check": false,
 }
