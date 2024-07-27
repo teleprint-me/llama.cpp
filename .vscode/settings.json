@@ -1,0 +1,13 @@
+{
+    "editor.formatOnSave": false,
+    "[python]": {
+        "diffEditor.ignoreTrimWhitespace": true,
+        "editor.formatOnType": false,
+        "editor.formatOnSave": false,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "never"
+        },
+    },
+    "isort.path": [],
+    "isort.check": false
+}
