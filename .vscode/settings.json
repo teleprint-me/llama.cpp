@@ -30,7 +30,8 @@
     "[c]": {
         "editor.tabSize": 4,
         "editor.formatOnSave": false,
-        "editor.insertSpaces": true
+        "editor.insertSpaces": true,
+        "editor.defaultFormatter": "xaver.clang-format"
     },
     "[cpp]": {
         "editor.tabSize": 4,
