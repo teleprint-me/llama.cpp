@@ -1083,6 +1083,7 @@ int main(int argc, char ** argv) {
     // find best evaluation order
     for (unsigned order = 0; order < (unsigned) GGML_CGRAPH_EVAL_ORDER_COUNT; ++order) {
         ctx_compute = ggml_init(ctx_compute_params);
+        // TODO: Dynamically set backend buffer based on build type
         ggml_gallocr_t alloc = ggml_gallocr_new(ggml_backend_cpu_buffer_type());
         gf = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
         gf->order = (enum ggml_cgraph_eval_order) order;
@@ -1115,6 +1116,7 @@ int main(int argc, char ** argv) {
 
     // allocate compute tensors
     ctx_compute = ggml_init(ctx_compute_params);
+    // TODO: Dynamically set backend buffer based on build type
     ggml_gallocr_t alloc = ggml_gallocr_new(ggml_backend_cpu_buffer_type());
     gf = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
     gf->order = best_order;
