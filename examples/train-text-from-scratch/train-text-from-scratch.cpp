@@ -38,7 +38,7 @@ struct my_llama_hparams {
 
 struct my_llama_layer {
     // normalization
-    struct ggml_tensor * attention_norm;
+    struct ggml_tensor * attn_norm;
 
     // attention
     struct ggml_tensor * wq;
@@ -135,7 +135,7 @@ static void set_param_model(struct my_llama_model * model) {
     for (uint32_t i = 0; i < n_layer; ++i) {
         auto & layer = model->layers[i];
 
-        ggml_set_param(ctx, layer.attention_norm);
+        ggml_set_param(ctx, layer.attn_norm);
         ggml_set_param(ctx, layer.wq);
         ggml_set_param(ctx, layer.wk);
         ggml_set_param(ctx, layer.wv);
@@ -190,7 +190,7 @@ static void init_model(struct my_llama_model * model) {
     for (uint32_t i = 0; i < n_layer; ++i) {
         auto & layer = model->layers[i];
 
-        layer.attention_norm = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_embd);
+        layer.attn_norm = ggml_new_tensor_1d(ctx, GGML_TYPE_F32, n_embd);
 
         layer.wq = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_embd);
         layer.wk = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd, n_embd);
@@ -203,7 +203,7 @@ static void init_model(struct my_llama_model * model) {
         layer.ffn_down = ggml_new_tensor_2d(ctx, GGML_TYPE_F32,   n_ff, n_embd);
         layer.ffn_up   = ggml_new_tensor_2d(ctx, GGML_TYPE_F32, n_embd,   n_ff);
 
-        ggml_set_name(layer.attention_norm, tni(LLM_TENSOR_ATTN_NORM, i));
+        ggml_set_name(layer.attn_norm, tni(LLM_TENSOR_ATTN_NORM, i));
 
         ggml_set_name(layer.wq,             tni(LLM_TENSOR_ATTN_Q, i));
         ggml_set_name(layer.wk,             tni(LLM_TENSOR_ATTN_K, i));
@@ -236,7 +236,7 @@ static void randomize_model(struct my_llama_model * model, int seed, float mean,
 
     for (uint32_t i = 0; i < n_layer; ++i) {
         auto & layer = model->layers[i];
-        randomize_tensor_normal(layer.attention_norm, rnd);
+        randomize_tensor_normal(layer.attn_norm, rnd);
 
         randomize_tensor_normal(layer.wq, rnd);
         randomize_tensor_normal(layer.wk, rnd);
@@ -326,7 +326,7 @@ static struct ggml_tensor * llama_build_train_graphs(
     for (int il = 0; il < n_layer; ++il) {
         struct my_llama_layer & layer = model->layers[il];
         struct ggml_tensor * t02 = ggml_rms_norm     (ctx, cur, f_norm_rms_eps);                    set_name(t02, "t02");     assert_shape_2d(t02, n_embd, N*n_batch);
-        struct ggml_tensor * t03 = ggml_repeat       (ctx, layer.attention_norm, t02);              set_name(t03, "t03");     assert_shape_2d(t03, n_embd, N*n_batch);
+        struct ggml_tensor * t03 = ggml_repeat       (ctx, layer.attn_norm, t02);              set_name(t03, "t03");     assert_shape_2d(t03, n_embd, N*n_batch);
         struct ggml_tensor * t04 = ggml_mul          (ctx, t03, t02);                               set_name(t04, "t04");     assert_shape_2d(t04, n_embd, N*n_batch);
         struct ggml_tensor * t05 = ggml_mul_mat      (ctx, layer.wq, t04);                          set_name(t05, "t05");     assert_shape_2d(t05, n_embd, N*n_batch);
         struct ggml_tensor * t06 = ggml_reshape_4d   (ctx, t05, n_embd/n_head, n_head, N, n_batch); set_name(t06, "t06");     assert_shape_4d(t06, n_embd/n_head, n_head, N, n_batch);
@@ -517,7 +517,7 @@ static void load_llama_model_gguf(struct gguf_context * fctx, struct ggml_contex
     for (uint32_t i = 0; i < model->hparams.n_layer; ++i) {
         auto & layer = model->layers[i];
 
-        copy_tensor_by_name(layer.attention_norm, f_ggml_ctx, tni(LLM_TENSOR_ATTN_NORM, i));
+        copy_tensor_by_name(layer.attn_norm, f_ggml_ctx, tni(LLM_TENSOR_ATTN_NORM, i));
         copy_tensor_by_name(layer.wq,             f_ggml_ctx, tni(LLM_TENSOR_ATTN_Q, i));
         copy_tensor_by_name(layer.wk,             f_ggml_ctx, tni(LLM_TENSOR_ATTN_K, i));
         copy_tensor_by_name(layer.wv,             f_ggml_ctx, tni(LLM_TENSOR_ATTN_V, i));
@@ -662,7 +662,7 @@ static void save_llama_model_gguf(struct gguf_context * fctx, const char * fn_vo
         auto & layer = model->layers[i];
 
 
-        gguf_add_tensor(fctx, layer.attention_norm);
+        gguf_add_tensor(fctx, layer.attn_norm);
         gguf_add_tensor(fctx, layer.wq);
         gguf_add_tensor(fctx, layer.wk);
         gguf_add_tensor(fctx, layer.wv);
@@ -914,7 +914,7 @@ static int64_t get_parameter_count(struct my_llama_model* model) {
 
     for (uint32_t i = 0; i < model->layers.size(); ++i) {
         auto & layer = model->layers[i];
-        nx += ggml_nelements(layer.attention_norm);
+        nx += ggml_nelements(layer.attn_norm);
         nx += ggml_nelements(layer.wq);
         nx += ggml_nelements(layer.wk);
         nx += ggml_nelements(layer.wv);
