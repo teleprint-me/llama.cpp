@@ -43,6 +43,10 @@
     "files.associations": {
         "*.tcss": "jinja-css",
         "*.h": "c",
+        "*.c": "c",
+        "*.hpp": "cpp",
+        "*.cpp": "cpp",
         "cstdlib": "cpp"
     },
+    "C_Cpp.default.compilerPath": "/usr/bin/g++",
 }

@@ -5,17 +5,16 @@
             "includePath": [
                 "/usr/include",
                 "/usr/local/include",
-                "${workspaceFolder}",
                 "${workspaceFolder}/common",
                 "${workspaceFolder}/ggml/include",
+                "${workspaceFolder}/ggml/src",
                 "${workspaceFolder}/include",
                 "${workspaceFolder}/src"
             ],
-            "defines": [],
-            "cStandard": "c17",
-            "cppStandard": "c++17",
-            "intelliSenseMode": "linux-clang-x64",
-            "compilerPath": "/usr/bin/clang++"
+            "cStandard": "c11",
+            "cppStandard": "c++14",
+            "intelliSenseMode": "linux-gcc-x64",
+            "compilerPath": "/usr/bin/g++"
         }
     ],
     "version": 4
