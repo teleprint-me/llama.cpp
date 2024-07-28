@@ -578,7 +578,7 @@ extern "C" {
 
     // n-dimensional tensor
     struct ggml_tensor {
-        enum ggml_type         type;
+        enum ggml_type         type; // data type, e.g. f32, f16, etc.
 
         GGML_DEPRECATED(enum ggml_backend_type backend, "use the buffer type to find the storage location of the tensor");
 
