@@ -1,3 +1,10 @@
+/**
+ * @note
+ * break llama_build_train_graphs
+ * break ggml_build_backward_gradient_checkpointing
+ * break ggml_new_hash_map
+ * break ggml_hash_find
+ */
 #include "ggml.h"
 #include "ggml-alloc.h"
 #include "ggml-backend.h"
@@ -18,6 +25,10 @@
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
+#endif
+
+#if defined(GGML_USE_VULKAN)
+#  include "ggml-vulkan.h"
 #endif
 
 struct my_llama_hparams {
@@ -220,7 +231,11 @@ static void init_model(struct my_llama_model * model) {
     set_param_model(model);
 
     // allocate data
+#if defined(GGML_USE_VULKAN)
+    model->data = ggml_backend_alloc_ctx_tensors_from_buft(ctx, ggml_backend_vk_host_buffer_type());
+#else
     model->data = ggml_backend_alloc_ctx_tensors_from_buft(ctx, ggml_backend_cpu_buffer_type());
+#endif
 }
 
 static void randomize_model(struct my_llama_model * model, int seed, float mean, float std, float min, float max) {
@@ -1054,7 +1069,11 @@ int main(int argc, char ** argv) {
 
     // measure required memory for input tensors
     // allocate input tensors
+#if defined(GGML_USE_VULKAN)
+    ggml_backend_buffer_t input_data = ggml_backend_alloc_ctx_tensors_from_buft(ctx_input, ggml_backend_vk_host_buffer_type());
+#else
     ggml_backend_buffer_t input_data = ggml_backend_alloc_ctx_tensors_from_buft(ctx_input, ggml_backend_cpu_buffer_type());
+#endif
     size_t max_input_size = ggml_backend_buffer_get_size(input_data);
     printf("%s: input_size = %zu bytes (%.1f MB)\n", __func__, max_input_size, (float) max_input_size / (1024.0f*1024.0f));
 
@@ -1084,7 +1103,11 @@ int main(int argc, char ** argv) {
     for (unsigned order = 0; order < (unsigned) GGML_CGRAPH_EVAL_ORDER_COUNT; ++order) {
         ctx_compute = ggml_init(ctx_compute_params);
         // TODO: Dynamically set backend buffer based on build type
+#if defined(GGML_USE_VULKAN)
+        ggml_gallocr_t alloc = ggml_gallocr_new(ggml_backend_vk_host_buffer_type());
+#else
         ggml_gallocr_t alloc = ggml_gallocr_new(ggml_backend_cpu_buffer_type());
+#endif
         gf = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
         gf->order = (enum ggml_cgraph_eval_order) order;
         gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
@@ -1117,7 +1140,11 @@ int main(int argc, char ** argv) {
     // allocate compute tensors
     ctx_compute = ggml_init(ctx_compute_params);
     // TODO: Dynamically set backend buffer based on build type
+#if defined(GGML_USE_VULKAN)
+    ggml_gallocr_t alloc = ggml_gallocr_new(ggml_backend_vk_host_buffer_type());
+#else
     ggml_gallocr_t alloc = ggml_gallocr_new(ggml_backend_cpu_buffer_type());
+#endif
     gf = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
     gf->order = best_order;
     gb = ggml_new_graph_custom(ctx_compute, LLAMA_TRAIN_MAX_NODES, true);
