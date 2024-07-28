@@ -42,7 +42,7 @@ void string_to_spv(const std::string& _name, const std::string& in_fname, const 
 std::map<std::string, std::string> merge_maps(const std::map<std::string, std::string>& a, const std::map<std::string, std::string>& b);
 void matmul_shaders(std::vector<std::future<void>>& tasks, bool fp16, bool matmul_id);
 void process_shaders(std::vector<std::future<void>>& tasks);
-void write_output_files(void);
+void write_output_files();
 
 std::mutex lock;
 std::vector<std::pair<std::string, std::string>> shader_fnames;
@@ -440,7 +440,7 @@ void process_shaders(std::vector<std::future<void>>& tasks) {
     }));
 }
 
-void write_output_files(void) {
+void write_output_files() {
     FILE* hdr = fopen(target_hpp.c_str(), "w");
     FILE* src = fopen(target_cpp.c_str(), "w");
 
@@ -496,7 +496,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    if (argc <= 1 || std::string(argv[1]) == "--help") {
+    if (argc <= 1 || args.find("--help") != args.end()) {
         std::cout << "Usage:\n"
                      "\tvulkan-shaders-gen [options]\n\n"
                      "Options:\n"
