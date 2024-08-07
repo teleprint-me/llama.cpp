@@ -890,15 +890,16 @@ ggml/src/ggml-metal-embed.o: \
 	ggml/src/ggml-common.h
 	@echo "Embedding Metal library"
 	@sed -e '/#include "ggml-common.h"/r ggml/src/ggml-common.h' -e '/#include "ggml-common.h"/d' < ggml/src/ggml-metal.metal > ggml/src/ggml-metal-embed.metal
-	$(eval TEMP_ASSEMBLY=$(shell mktemp))
-	@echo ".section __DATA, __ggml_metallib"            >  $(TEMP_ASSEMBLY)
-	@echo ".globl _ggml_metallib_start"                 >> $(TEMP_ASSEMBLY)
-	@echo "_ggml_metallib_start:"                       >> $(TEMP_ASSEMBLY)
-	@echo ".incbin \"ggml/src/ggml-metal-embed.metal\"" >> $(TEMP_ASSEMBLY)
-	@echo ".globl _ggml_metallib_end"                   >> $(TEMP_ASSEMBLY)
-	@echo "_ggml_metallib_end:"                         >> $(TEMP_ASSEMBLY)
-	@$(AS) $(TEMP_ASSEMBLY) -o $@
-	@rm -f ${TEMP_ASSEMBLY}
+	$(eval TEMP_ASSEMBLY=$(shell mktemp -d))
+	@echo ".section __DATA, __ggml_metallib"            >  $(TEMP_ASSEMBLY)/ggml-metal-embed.s
+	@echo ".globl _ggml_metallib_start"                 >> $(TEMP_ASSEMBLY)/ggml-metal-embed.s
+	@echo "_ggml_metallib_start:"                       >> $(TEMP_ASSEMBLY)/ggml-metal-embed.s
+	@echo ".incbin \"ggml/src/ggml-metal-embed.metal\"" >> $(TEMP_ASSEMBLY)/ggml-metal-embed.s
+	@echo ".globl _ggml_metallib_end"                   >> $(TEMP_ASSEMBLY)/ggml-metal-embed.s
+	@echo "_ggml_metallib_end:"                         >> $(TEMP_ASSEMBLY)/ggml-metal-embed.s
+	$(CC) $(CFLAGS) -c $(TEMP_ASSEMBLY)/ggml-metal-embed.s -o $@
+	@rm -f ${TEMP_ASSEMBLY}/ggml-metal-embed.s
+	@rmdir ${TEMP_ASSEMBLY}
 endif
 endif # GGML_METAL
 
@@ -1617,42 +1618,41 @@ llama-q8dot: pocs/vdot/q8dot.cpp ggml/src/ggml.o \
 # Mark legacy binary targets as .PHONY so that they are always checked.
 .PHONY: main quantize perplexity embedding server finetune
 
+# Define the object file target
+examples/deprecation-warning/deprecation-warning.o: examples/deprecation-warning/deprecation-warning.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 # NOTE: We currently will always build the deprecation-warning `main` and `server` binaries to help users migrate.
 #  Eventually we will want to remove these target from building all the time.
-main: examples/deprecation-warning/deprecation-warning.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+main: examples/deprecation-warning/deprecation-warning.o
+	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
 	@echo "NOTICE: The 'main' binary is deprecated. Please use 'llama-cli' instead."
 
-server: examples/deprecation-warning/deprecation-warning.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+server: examples/deprecation-warning/deprecation-warning.o
+	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
 	@echo "NOTICE: The 'server' binary is deprecated. Please use 'llama-server' instead."
 
-quantize: examples/deprecation-warning/deprecation-warning.cpp
+quantize: examples/deprecation-warning/deprecation-warning.o
 ifneq (,$(wildcard quantize))
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
 	@echo "#########"
 	@echo "WARNING: The 'quantize' binary is deprecated. Please use 'llama-quantize' instead."
 	@echo "  Remove the 'quantize' binary to remove this warning."
 	@echo "#########"
 endif
 
-perplexity: examples/deprecation-warning/deprecation-warning.cpp
+perplexity: examples/deprecation-warning/deprecation-warning.o
 ifneq (,$(wildcard perplexity))
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
 	@echo "#########"
 	@echo "WARNING: The 'perplexity' binary is deprecated. Please use 'llama-perplexity' instead."
 	@echo "  Remove the 'perplexity' binary to remove this warning."
 	@echo "#########"
 endif
 
-embedding: examples/deprecation-warning/deprecation-warning.cpp
+embedding: examples/deprecation-warning/deprecation-warning.o
 ifneq (,$(wildcard embedding))
-	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
 	@echo "#########"
 	@echo "WARNING: The 'embedding' binary is deprecated. Please use 'llama-embedding' instead."
 	@echo "  Remove the 'embedding' binary to remove this warning."
