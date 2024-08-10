@@ -645,7 +645,7 @@ extern "C" {
 
     struct ggml_hash_set {
         size_t size;
-        ggml_bitset_t * used;
+        ggml_bitset_t * used; // is of type uint32_t
         struct ggml_tensor ** keys;
     };
 

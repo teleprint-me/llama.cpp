@@ -680,6 +680,10 @@ static size_t ggml_hash_insert(struct ggml_hash_set * hash_set, struct ggml_tens
 // return index, asserts if table is full
 static size_t ggml_hash_find_or_insert(struct ggml_hash_set * hash_set, struct ggml_tensor * key);
 
+// note: the hash function is straightforward, but if p values (tensor pointers)
+// are not sufficiently diverse, collisions can occur frequently, especially 
+// with a small hash set.
+//
 // hash function for ggml_tensor
 static inline size_t ggml_hash(const struct ggml_tensor * p) {
     // the last 4 bits are always zero due to alignment
@@ -695,7 +699,7 @@ static size_t ggml_hash_find(const struct ggml_hash_set * hash_set, struct ggml_
         i = (i + 1) % hash_set->size;
         if (i == h) {
             // visited all hash table entries -> not found
-            return GGML_HASHSET_FULL;
+            return GGML_HASHSET_FULL;  // expands to ((size_t)-1)
         }
     }
     return i;

@@ -1869,8 +1869,8 @@ struct ggml_context_container {
 };
 
 struct ggml_compute_state_shared {
-    const struct ggml_cgraph * cgraph;
-    const struct ggml_cplan * cplan;
+    const struct ggml_cgraph * cgraph; // compute graph
+    const struct ggml_cplan * cplan; // compute plan
 
     int n_threads;
 
@@ -1878,6 +1878,7 @@ struct ggml_compute_state_shared {
     atomic_int n_barrier;
     atomic_int n_barrier_passed;
 
+    // typedef bool (*ggml_abort_callback)(void *data)
     ggml_abort_callback abort_callback; // abort ggml_graph_compute when true
     void * abort_callback_data;
 
