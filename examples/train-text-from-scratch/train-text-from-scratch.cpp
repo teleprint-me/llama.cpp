@@ -401,7 +401,9 @@ static struct ggml_tensor * llama_build_train_graphs(
     ggml_build_forward_expand(gf, t36);
 
     if (enable_checkpointing) {
-        ggml_build_backward_gradient_checkpointing(ctx, gf, gb, gb_tmp, checkpoints.data(), (int) checkpoints.size());
+        ggml_build_backward_gradient_checkpointing(
+            ctx, gf, gb, gb_tmp, checkpoints.data(), (int) checkpoints.size()
+        );
     } else {
         ggml_graph_cpy(gf, gb);
         ggml_build_backward_expand(ctx, gf, gb, true);
