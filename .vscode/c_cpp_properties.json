@@ -5,6 +5,7 @@
             "includePath": [
                 "/usr/include",
                 "/usr/local/include",
+                "/usr/lib/gcc/x86_64-pc-linux-gnu/14.2.1/include",
                 "${workspaceFolder}/common",
                 "${workspaceFolder}/ggml/include",
                 "${workspaceFolder}/ggml/src",
