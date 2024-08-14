@@ -17213,7 +17213,7 @@ void ggml_build_backward_gradient_checkpointing(
     // insert checkpoints in replacements
     for (int i = 0; i < n_checkpoints; ++i) {
         size_t k = ggml_hash_find(&replacements->set, checkpoints[i]);
-        GGML_ASSERT(k != GGML_HASHSET_FULL); // assert that not full
+        GGML_ASSERT(k != GGML_HASHSET_FULL); // assert ((size_t)-1) is not full
         GGML_ASSERT(replacements->set.keys[k] == NULL); // assert that we don't overwrite
         replacements->set.keys[k] = checkpoints[i];
         replacements->vals[k]     = checkpoints[i];

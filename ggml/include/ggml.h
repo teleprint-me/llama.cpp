@@ -597,22 +597,22 @@ extern "C" {
         // op params - allocated as int32_t for alignment
         int32_t op_params[GGML_MAX_OP_PARAMS / sizeof(int32_t)];
 
-        int32_t flags;
+        int32_t flags; // what do these flags represent?
 
-        struct ggml_tensor * grad;
-        struct ggml_tensor * src[GGML_MAX_SRC];
+        struct ggml_tensor * grad; // gradient tensor
+        struct ggml_tensor * src[GGML_MAX_SRC]; // alloted sizeof(struct ggml_tensor) * 10
 
         // source tensor and offset for views
-        struct ggml_tensor * view_src;
-        size_t               view_offs;
+        struct ggml_tensor * view_src; // if the tensor is a view, this points to the source tensor
+        size_t               view_offs; // offset in bytes for the view
 
-        void * data;
+        void * data; // pointer to the actual data buffer
 
-        char name[GGML_MAX_NAME];
+        char name[GGML_MAX_NAME]; // GGML_MAX_NAME allots 64 bytes
 
         void * extra; // extra things e.g. for ggml-cuda.cu
 
-        // char padding[4];
+        // char padding[4]; // why is this commented out? future implementation or dead code?
     };
 
     static const size_t GGML_TENSOR_SIZE = sizeof(struct ggml_tensor);

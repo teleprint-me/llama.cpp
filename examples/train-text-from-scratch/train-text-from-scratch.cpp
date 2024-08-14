@@ -401,6 +401,11 @@ static struct ggml_tensor * llama_build_train_graphs(
     ggml_build_forward_expand(gf, t36);
 
     if (enable_checkpointing) {
+        // checkpoints is defined as std::vector<ggml_tensor *> checkpoints
+        // so, checkpoints is a vector of pointers to tensors
+        // checkpoints.data() is defined as inline ggml_tensor **std::vector<ggml_tensor *>::data()
+        // `data` is defined as `void* data` within `ggml_tensor`
+        // checkpoints.size() is defined as inline std::size_t std::vector<ggml_tensor *>::size() const
         ggml_build_backward_gradient_checkpointing(
             ctx, gf, gb, gb_tmp, checkpoints.data(), (int) checkpoints.size()
         );
