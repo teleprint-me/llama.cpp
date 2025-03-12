@@ -260,7 +260,7 @@ static void test_templates(const struct common_chat_templates * tmpls, const std
         }
 
         if (expect_grammar_triggered) {
-            const auto msg = common_chat_parse(data.delta, data.params.format, /* is_partial= */ false, {});
+            const auto msg = common_chat_parse(data.delta, data.params.format, /* is_partial= */ false);
             assert_msg_equals(test_message, msg);
         }
 

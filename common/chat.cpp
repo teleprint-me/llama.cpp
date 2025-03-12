@@ -1695,42 +1695,10 @@ static void common_chat_parse(common_chat_msg_parser & builder, common_chat_form
     builder.finish();
 }
 
-common_chat_msg common_chat_parse(const std::string & input, common_chat_format format, bool is_partial, const std::vector<common_regex> & trigger_regexes) {
+common_chat_msg common_chat_parse(const std::string & input, common_chat_format format, bool is_partial) {
     auto extract_reasoning = format == COMMON_CHAT_FORMAT_DEEPSEEK_R1_EXTRACT_REASONING
         || format == COMMON_CHAT_FORMAT_HERMES_2_PRO_EXTRACT_REASONING
         || format == COMMON_CHAT_FORMAT_COMMAND_R7B_EXTRACT_REASONING;
-
-    if (is_partial) {
-        bool found_trigger = false;
-        auto earliest_partial_trigger = std::string::npos;
-
-        for (const auto & trigger_regex : trigger_regexes) {
-            auto match = trigger_regex.search(input, 0);
-            if (match.type == COMMON_REGEX_MATCH_TYPE_PARTIAL) {
-                earliest_partial_trigger = std::min(earliest_partial_trigger, match.groups[0].begin);
-            } else if (match.type == COMMON_REGEX_MATCH_TYPE_FULL) {
-                if (match.groups[0].begin < earliest_partial_trigger) {
-                    found_trigger = true;
-                    break;
-                }
-            }
-        }
-
-        if (!found_trigger && earliest_partial_trigger != std::string::npos) {
-            // Stop stopping at the earliest partial trigger to avoid messing the parsing big time.
-            auto before_trigger = input.substr(0, earliest_partial_trigger);
-            if (before_trigger.empty()) {
-                return {};
-            }
-            common_chat_msg_parser builder(before_trigger, is_partial, extract_reasoning);
-            try {
-                common_chat_parse(builder, format);
-            } catch (const common_chat_msg_partial_exception & ex) {
-                LOG_DBG("Partial parse: %s\n", ex.what());
-            }
-            return builder.result();
-        }
-    }
 
     common_chat_msg_parser builder(input, is_partial, extract_reasoning);
     try {
