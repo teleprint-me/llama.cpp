@@ -64,6 +64,8 @@ add_library(${TARGET} STATIC
     console.h
     json-schema-to-grammar.cpp
     json.hpp
+    json-partial.h
+    json-partial.cpp
     llguidance.cpp
     log.cpp
     log.h
