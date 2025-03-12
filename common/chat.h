@@ -12,6 +12,10 @@ struct common_chat_tool_call {
     std::string name;
     std::string arguments;
     std::string id;
+
+    bool operator==(const common_chat_tool_call & other) const {
+        return name == other.name && arguments == other.arguments && id == other.id;
+    }
 };
 
 struct common_chat_msg_content_part {
@@ -27,6 +31,10 @@ struct common_chat_msg {
     std::string reasoning_content;
     std::string tool_name;
     std::string tool_call_id;
+
+    bool empty() const {
+        return content.empty() && content_parts.empty() && tool_calls.empty() && reasoning_content.empty() && tool_name.empty() && tool_call_id.empty();
+    }
 };
 
 struct common_chat_tool {
@@ -133,3 +141,18 @@ template <class T> T common_chat_msgs_to_json_oaicompat(const std::vector<common
 // T can be std::string containing JSON or nlohmann::ordered_json
 template <class T> std::vector<common_chat_tool> common_chat_tools_parse_oaicompat(const T & tools);
 template <class T> T common_chat_tools_to_json_oaicompat(const std::vector<common_chat_tool> & tools);
+
+struct common_chat_msg_diff {
+    // std::string reasoning_content_delta;
+    std::string content_delta;
+    size_t tool_call_index = std::string::npos;
+    common_chat_tool_call tool_call_delta;
+
+    static std::vector<common_chat_msg_diff> compute_diffs(const common_chat_msg & previous_msg, const common_chat_msg & new_msg);
+
+    bool operator==(const common_chat_msg_diff & other) const {
+        return content_delta == other.content_delta
+            && tool_call_index == other.tool_call_index
+            && tool_call_delta == other.tool_call_delta;
+    }
+};
