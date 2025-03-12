@@ -1,10 +1,279 @@
 #include "chat.h"
+#include "common.h"
 #include "json-schema-to-grammar.h"
 #include "log.h"
+#include "json-partial.h"
 #include "minja/chat-template.hpp"
 #include "minja/minja.hpp"
+#include "regex-partial.h"
 
+#include <cstdio>
 #include <optional>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+using common_string_ranges = std::vector<common_string_range>;
+
+class common_chat_msg_partial_exception : public std::runtime_error {
+  public:
+    common_chat_msg_partial_exception(const std::string & message) : std::runtime_error(message) {}
+};
+
+static const common_regex default_start_think_regex("<think>", /* at_start= */ true);
+static const common_regex default_end_think_regex("</think>");
+
+static std::string string_diff(const std::string & last, const std::string & current) {
+    if (last.empty()) {
+        return current;
+    }
+    if (!string_starts_with(current, last)) {
+        throw std::runtime_error("Invalid diff: '" + last + "' not found at start of '" + current + "'");
+    }
+    return current.substr(last.size());
+}
+
+struct common_chat_msg_parser {
+    std::string input;
+    bool is_partial;
+    bool extract_reasoning;
+    size_t pos = 0;
+    common_chat_msg result;
+
+    common_chat_msg_parser(const std::string & input, bool is_partial, bool extract_reasoning)
+        : input(input), is_partial(is_partial), extract_reasoning(extract_reasoning)
+    {
+        result.role = "assistant";
+    }
+
+    std::string str(const common_string_range & rng) const {
+        GGML_ASSERT(rng.begin <= rng.end);
+        return input.substr(rng.begin, rng.end - rng.begin);
+    }
+
+    void finish() {
+        if (!is_partial && pos != input.size()) {
+            throw std::runtime_error("Unexpected content at end of input: " + input.substr(pos));
+        }
+        result.reasoning_content = string_strip(result.reasoning_content);
+        if (!result.tool_calls.empty()) {
+            result.content = string_strip(result.content);
+        }
+    }
+
+    void incomplete(const std::string & message) {
+        if (is_partial) {
+            finish();
+        }
+        throw common_chat_msg_partial_exception(message);
+    }
+
+    bool consume_spaces() {
+        const auto length = input.size();
+        auto consumed = false;
+        while (pos < length && std::isspace(input[pos])) {
+            ++pos;
+            consumed = true;
+        }
+        return consumed;
+    }
+
+    bool try_consume_literal(const std::string & literal) {
+        auto pos = this->pos;
+        for (auto i = 0u; i < literal.size(); ++i) {
+            if (pos >= input.size()) {
+                return false;
+            }
+            if (input[pos] != literal[i]) {
+                return false;
+            }
+            ++pos;
+        }
+        this->pos = pos;
+        return true;
+    }
+
+    void consume_literal(const std::string & literal) {
+        if (!try_consume_literal(literal)) {
+            incomplete("Expected literal '" + literal + "' at position " + std::to_string(pos));
+        }
+    }
+
+    void try_consume_think_tags(const common_regex & start_think_regex = default_start_think_regex, const common_regex & end_think_regex = default_end_think_regex) {
+        if (extract_reasoning) {
+            if (!try_consume_regex(start_think_regex, [&](const auto & /* groups */) {
+                if (!try_find_regex(end_think_regex, [&](const std::string & prelude, const common_string_ranges & /* groups */) {
+                    result.reasoning_content = prelude;
+                })) {
+                    result.reasoning_content = consume_rest();
+                    incomplete("Failed to find end of reasoning tag " + end_think_regex.str());
+                }
+            })) {
+                try_find_regex(end_think_regex, [&](const std::string & prelude, const common_string_ranges & /* groups */) {
+                    result.reasoning_content = prelude;
+                });
+            }
+        }
+    }
+
+    std::string consume_rest() {
+        auto rest = input.substr(pos);
+        pos = input.size();
+        return rest;
+    }
+
+    // Tries to find the regex, consumes it (pos right after it) and gives the prelude (right before it) and the groups to the callback.
+    bool try_find_regex(const common_regex & regex, const std::function<void(const std::string & prelude, const common_string_ranges & groups)> & callback = nullptr) {
+        auto m = regex.search(input, pos);
+        if (m.type == COMMON_REGEX_MATCH_TYPE_NONE) {
+            return false;
+        }
+        if (m.type == COMMON_REGEX_MATCH_TYPE_PARTIAL) {
+            incomplete(regex.str());
+            return false;
+        }
+        auto prelude = input.substr(pos, m.groups[0].begin - pos);
+        pos = m.groups[0].end;
+
+        if (callback) {
+            callback(prelude, m.groups);
+        }
+        return true;
+    }
+
+    void consume_regex(const common_regex & regex, const std::function<void(const common_string_ranges & groups)> & callback = nullptr) {
+        if (!try_consume_regex(regex, callback)) {
+            incomplete("Failed to consume regex: " + regex.str());
+        }
+    }
+
+    bool try_consume_regex(const common_regex & regex, const std::function<void(const common_string_ranges & groups)> & callback = nullptr) {
+        if (!regex.at_start()) {
+            throw std::runtime_error("try_consume_regex requires a common_regex w/ at_start=true");
+        }
+        auto m = regex.search(input, pos);
+        if (m.type == COMMON_REGEX_MATCH_TYPE_NONE) {
+            return false;
+        }
+        if (m.type == COMMON_REGEX_MATCH_TYPE_PARTIAL) {
+            incomplete(regex.str());
+            return false;
+        }
+        pos = m.groups[0].end;
+
+        if (callback) {
+            callback(m.groups);
+        }
+        return true;
+    }
+
+    // Calls the callback, *then* explodes w/ a partial match exception if it's partial
+    void consume_json(
+        const std::function<void(const common_json & result)> & callback,
+        const std::vector<std::vector<std::string>> & args_paths = {}
+    ) {
+        if (!try_consume_json(callback, args_paths)) {
+            incomplete("Failed to consume JSON");
+        }
+    }
+
+    bool try_consume_json(
+        const std::function<void(const common_json & result)> & callback,
+        const std::vector<std::vector<std::string>> & args_paths = {}
+    ) {
+        auto it = input.cbegin() + pos;
+        const auto end = input.cend();
+        common_json result;
+        std::string healing_marker = "$llama.cpp.json$";
+        if (!common_json_parse(it, end, healing_marker, result)) {
+            return false;
+        }
+        pos = std::distance(input.cbegin(), it);
+        if (result.healing_marker.marker.empty()) {
+            // No healing marker, just return the parsed json
+            if (callback) {
+                callback(result);
+            }
+            return true;
+        }
+        if (!is_partial) {
+            incomplete("JSON is incomplete");
+            return false; // Actually unreachable
+        }
+
+        LOG_DBG("Parsed partial JSON: %s (json_healing_marker: %s)\n", result.json.dump().c_str(), result.healing_marker.json_dump_marker.c_str());
+
+        // Healing marker found, we need to visit the json and removed objects that we didn't want to heal
+        auto is_arguments_path = [&](const std::vector<std::string> & path) {
+            return std::find(args_paths.begin(), args_paths.end(), path) != args_paths.end();
+        };
+
+        std::vector<std::string> path;
+        std::function<json(const json &)> remove_unsupported_healings = [&](const json & j) {
+            if (j.is_object()) {
+                auto obj = json::object();
+                for (const auto & p : j.items()) {
+                    const auto & key = p.key();
+                    const auto & value = p.value();
+                    const std::string key_str = key; // NOLINT
+                    auto idx = key_str.find(healing_marker);
+                    if (idx != std::string::npos) {//} && idx != 0) {
+                        // Don't heal keys halfway, cut just after their opening quotes
+                        obj[result.healing_marker.marker] = 1;
+                        if (idx != 0) {
+                            result.healing_marker.json_dump_marker = result.healing_marker.marker;
+                        }
+                        break;
+                    }
+                    path.push_back(key_str);
+                    auto is_args = is_arguments_path(path);
+                    if (is_args) {
+                        obj[key] = value;
+                    } else if (value.is_string()) {
+                        const std::string value_str = value;
+                        if (value_str.find(healing_marker) == std::string::npos) {
+                            obj[key] = value;
+                        } else {
+                            obj[result.healing_marker.marker] = 1;
+                            result.healing_marker.json_dump_marker = result.healing_marker.marker;
+                        }
+                    } else {
+                        obj[key] = remove_unsupported_healings(value);
+                    }
+                    path.pop_back();
+                }
+                return obj;
+            }
+            if (j.is_array()) {
+                auto arr = json::array();
+                for (const auto & value : j) {
+                    // if (value.is_string()) {
+                    //     std::string str = value;
+                    //     if (str.find(healing_marker) != std::string::npos) {
+                    //         // Don't heal array values, and discard the rest of the array.
+                    //         break;
+                    //     }
+                    // }
+                    arr.push_back(remove_unsupported_healings(value));
+                }
+                return arr;
+            }
+            return j;
+        };
+
+        if (!is_arguments_path({})) {
+            auto cleaned = remove_unsupported_healings(result.json);
+            LOG_DBG("Cleaned up JSON %s to %s (json_healing_marker : '%s')\n", result.json.dump().c_str(), cleaned.dump().c_str(), result.healing_marker.json_dump_marker.c_str());
+            result.json = cleaned;
+        }
+        LOG_DBG("Half-healed json: %s\n", result.json.dump().c_str());
+        if (callback) {
+            callback(result);
+        }
+        return true;
+    }
+};
+
 std::vector<common_chat_msg_diff> common_chat_msg_diff::compute_diffs(const common_chat_msg & previous_msg, const common_chat_msg & new_msg) {
     std::vector<common_chat_msg_diff> diffs;
     // if (previous_msg.reasoning_content != current.reasoning_content) {
@@ -491,169 +760,114 @@ std::string common_chat_format_name(common_chat_format format) {
     }
 }
 
-static bool parse_json(std::string::const_iterator & it, const std::string::const_iterator & end, json & out) {
-    // // https://json.nlohmann.me/features/parsing/sax_interface/
-    struct json_error_locator : public nlohmann::json_sax<json> {
-        std::size_t position;
-        bool found_error;
-
-        json_error_locator() : position(0), found_error(false) {}
-
-        bool parse_error(std::size_t position, const std::string &, const json::exception &) override { // NOLINT
-            this->position = position - 1;
-            this->found_error = true;
-            return false;
-        }
-        bool null() override { return true; } // NOLINT
-        bool boolean(bool) override { return true; } // NOLINT
-        bool number_integer(number_integer_t) override { return true; } // NOLINT
-        bool number_unsigned(number_unsigned_t) override { return true; } // NOLINT
-        bool number_float(number_float_t, const string_t &) override { return true; } // NOLINT
-        bool string(string_t &) override { return true; } // NOLINT
-        bool binary(binary_t &) override { return true; } // NOLINT
-        bool start_object(std::size_t) override { return true; } // NOLINT
-        bool key(string_t &) override { return true; } // NOLINT
-        bool end_object() override { return true; }
-        bool start_array(std::size_t) override { return true; } // NOLINT
-        bool end_array() override { return true; }
-    };
-    json_error_locator err_loc;
-    json::sax_parse(it, end, &err_loc);
-
-    std::string::const_iterator temptative_end;
-    if (err_loc.found_error) {
-        temptative_end = it + err_loc.position;
-    } else {
-        temptative_end = end;
-    }
-    std::string json_sub {it, temptative_end};
-    try {
-        out = json::parse(json_sub);
-        it = temptative_end;
-        return true;
-    } catch (const std::exception &) {
+static bool process_tool_call(const std::string & name, const std::string & id, const std::string & arguments, const common_healing_marker & healing_marker, std::vector<common_chat_tool_call> & out) {
+    if (name.empty()) {
         return false;
     }
+
+    auto marker_idx = std::string::npos;
+    if (!arguments.empty() && !healing_marker.marker.empty()) {
+        marker_idx = arguments.find(healing_marker.json_dump_marker);
+        if (marker_idx == std::string::npos) {
+            marker_idx = arguments.find(healing_marker.marker);
+        }
+    }
+
+    common_chat_tool_call tool_call;
+    tool_call.name = name;
+    tool_call.arguments = marker_idx != std::string::npos ? arguments.substr(0, marker_idx) : arguments;
+    tool_call.id = id;
+
+    if (tool_call.arguments == "\"") {
+        // This happens because of completing `:"$magic` after `"arguments"`
+        tool_call.arguments = "";
+    }
+    LOG_DBG("Tool call arguments:\n\traw: %s\n\tresult: %s\n", arguments.c_str(), tool_call.arguments.c_str());
+    out.push_back(tool_call);
+    return true;
+}
+static bool process_tool_call(const json & tool_call, const common_healing_marker & healing_marker, std::vector<common_chat_tool_call> & out) {
+    std::string name = tool_call.contains("name") ? tool_call.at("name") : "";
+    std::string id = tool_call.contains("id") ? tool_call.at("id") : "";
+    std::string arguments = tool_call.contains("arguments") ? tool_call.at("arguments").dump() : "";
+    return process_tool_call(name, id, arguments, healing_marker, out);
 }
 
-static bool parse_literal(std::string::const_iterator & it, const std::string::const_iterator & end, const std::string & expected) {
-    auto expected_it = expected.begin();
-    auto tmp_it = it;
-    while (tmp_it != end && expected_it != expected.end() && *tmp_it == *expected_it) {
-        ++tmp_it;
-        ++expected_it;
+static bool process_tool_call_array(const json & arr, const common_healing_marker & healing_marker, std::vector<common_chat_tool_call> & tool_calls) {
+    for (const auto & item : arr) {
+        if (!process_tool_call(item, healing_marker, tool_calls)) {
+            return false;
+        }
     }
-    if (expected_it == expected.end()) {
-        it = tmp_it;
-        return true;
-    }
-    return false;
-}
-
-static std::optional<std::smatch> parse_pattern(std::string::const_iterator & it, const std::string::const_iterator & end, const std::regex & expected) {
-    std::smatch match;
-    if (std::regex_match(it, end, match, expected)) {
-        it = match.suffix().first;
-        return match;
-    }
-    return std::nullopt;
-}
-
-static void consume_spaces(std::string::const_iterator & it, const std::string::const_iterator & end) {
-    while (it != end && std::isspace(*it)) {
-        ++it;
-    }
+    return true;
 }
 
 /**
  * Takes a prefix regex that must have 1 group to capture the function name, a closing suffix, and expects json parameters in between.
  * Aggregates the prefix, suffix and in-between text into the content.
  */
-static common_chat_msg parse_json_tool_calls(
-    const std::string& input,
-    const std::optional<std::regex> & trigger_opt,
-    const std::regex & function_regex,
-    const std::regex & close_regex,
-    bool allow_raw_python = false) {
-    std::smatch match;
+static void parse_json_tool_calls(
+    common_chat_msg_parser & builder,
+    const std::optional<common_regex> & block_open,
+    const common_regex & function_regex,
+    const common_regex & close_regex,
+    const std::optional<common_regex> & block_close,
+    bool allow_raw_python = false,
+    const std::function<bool(const std::string & name)> & is_function = nullptr) {
 
-    common_chat_msg result;
-    result.role = "assistant";
+    auto parse_tool_calls = [&]() {
+        while (true) {
+            if (!builder.try_find_regex(function_regex, [&](const auto & prelude, const auto & groups) {
+                auto name = builder.str(groups[1]);
+                builder.result.content += prelude;
+                if (is_function && !is_function(name)) {
+                    return;
+                }
+                builder.consume_json([&](const auto & partial) {
+                    std::string arguments = partial.json.dump();
+                    if (!process_tool_call(name, "", arguments, partial.healing_marker, builder.result.tool_calls)) {
+                        builder.incomplete("incomplete tool call");
+                    }
+                    builder.consume_regex(close_regex, nullptr);
 
-
-    auto end = input.end();
-    auto it = input.begin();
-
-    if (trigger_opt) {
-        if (!std::regex_search(it, end, match, *trigger_opt)) {
-            result.content = input;
-            return result;
-        }
-        result.content = match.prefix().str();
-        it = match.suffix().first;
-    }
-
-    while (it != end) {
-        std::sregex_iterator rend;
-        std::sregex_iterator rit(it, end, function_regex);
-        if (rit == rend) {
-            result.content += std::string(it, end);
-            break;
-        }
-        auto name = rit->str(1);
-        result.content += std::string(it, rit->prefix().second);
-        it = rit->suffix().first;
-
-        json arguments;
-        if (parse_json(it, end, arguments)) {
-            if (!std::regex_search(it, end, match, close_regex)) {
-                throw std::runtime_error("Malformed input, missing closing pattern: " + input);
-            }
-            it = match.suffix().first;
-            result.tool_calls.push_back({name, arguments.is_string() ? arguments.get<std::string>() : arguments.dump(), /* id= */ ""});
-        } else {
-            if (allow_raw_python && name == "python") {
-                result.tool_calls.push_back({name, json({{"code", std::string(it, end)}}).dump(), /* id= */ ""});
+                }, {{}});
+            })) {
                 break;
             }
-            throw std::runtime_error("Failed to parse json tool call arguments: " + input);
         }
-    }
-
-    if (!result.tool_calls.empty()) {
-        if (!string_strip(result.content).empty()) {
-            LOG_WRN("Content found with tool calls: %s\n", result.content.c_str());
+        if (block_close) {
+            builder.consume_regex(*block_close, nullptr);
         }
-        result.content = "";
-    }
-    return result;
-}
-
-static common_chat_tool_call process_tool_call(const json & tool_call) {
-    const auto & arguments = tool_call.at("arguments");
-    return {
-        /* .name = */ tool_call.at("name"),
-        /* .arguments = */ arguments.is_string() ? arguments.get<std::string>() : arguments.dump(),
-        /* .id = */ tool_call.contains("id") ? tool_call.at("id") : "",
+        builder.result.content += builder.consume_rest();
     };
-}
-static common_chat_msg parse_prefixed_json_tool_call_array(const std::string& input, const std::string & prefix, size_t rstrip_prefix = 0) {
-    auto content_end = input.find(prefix);
-    size_t tc_start = std::string::npos;
-
-    common_chat_msg result;
-    result.role = "assistant";
-    if (content_end == std::string::npos) {
-        result.content = input;
-    } else {
-        tc_start = content_end + prefix.size() - rstrip_prefix;
-        result.content = input.substr(0, content_end);
-        auto tool_calls = json::parse(input.substr(tc_start));
-        for (const auto & tool_call : tool_calls) {
-            result.tool_calls.emplace_back(process_tool_call(tool_call));
+    if (block_open) {
+        if (!builder.try_find_regex(*block_open, [&](const auto & prelude, const auto & /* groups */) {
+            builder.result.content += prelude;
+            parse_tool_calls();
+        })) {
+            builder.result.content += builder.consume_rest();
         }
+    } else {
+        parse_tool_calls();
     }
-    return result;
+}
+
+static void parse_prefixed_json_tool_call_array(common_chat_msg_parser & builder, const common_regex & prefix, size_t rstrip_prefix = 0) {
+    static const std::vector<std::vector<std::string>> args_paths = {{"arguments"}};
+    if (!builder.try_find_regex(prefix, [&](const auto & prelude, const auto & /* groups */) {
+        builder.result.content += prelude;
+        if (builder.pos < rstrip_prefix) {
+            throw std::runtime_error("Invalid prefix length");
+        }
+        builder.pos -= rstrip_prefix;
+        builder.consume_json([&](const auto & partial) {
+            if (!process_tool_call_array(partial.json, partial.healing_marker, builder.result.tool_calls)) {
+                builder.incomplete("incomplete tool call array");
+            }
+        }, args_paths);
+    })) {
+        builder.result.content += builder.consume_rest();
+    }
 }
 
 static void foreach_function(const json & tools, const std::function<void(const json &)> & fn) {
@@ -780,29 +994,30 @@ static common_chat_params common_chat_params_init_generic(const common_chat_temp
     data.format = COMMON_CHAT_FORMAT_GENERIC;
     return data;
 }
-static common_chat_msg common_chat_parse_generic(const std::string & input) {
-    json data = json::parse(input);
-    common_chat_msg result;
-    result.role = "assistant";
-    if (data.contains("tool_calls")) {
-        for (const auto & tool_call : data.at("tool_calls")) {
-            result.tool_calls.push_back({
-                tool_call.at("name"),
-                tool_call.at("arguments").dump(),
-                tool_call.contains("id") ? tool_call.at("id") : "",
-            });
+static void common_chat_parse_generic(common_chat_msg_parser & builder) {
+    static const std::vector<std::vector<std::string>> args_paths = {
+        {"tool_call", "arguments"},
+        {"tool_calls", "arguments"},
+    };
+    builder.consume_json([&](const auto & data) {
+        if (data.json.contains("tool_calls")) {
+            for (const auto & tc : data.json.at("tool_calls")) {
+                if (!process_tool_call(tc, data.healing_marker, builder.result.tool_calls)) {
+                    builder.incomplete("incomplete tool call");
+                }
+            }
+        } else if (data.json.contains("tool_call")) {
+            const auto & tc = data.json.at("tool_call");
+            if (!process_tool_call(tc, data.healing_marker, builder.result.tool_calls)) {
+                builder.incomplete("incomplete tool call");
+            }
+        } else if (data.json.contains("response")) {
+            const auto & response = data.json.at("response");
+            builder.result.content += response.is_string() ? response.template get<std::string>() : response.dump(2);
+        } else {
+            builder.incomplete("Expected 'tool_call', 'tool_calls' or 'response' in JSON");
         }
-    } else if (data.contains("tool_call")) {
-        result.tool_calls.push_back({
-            data.at("tool_call").at("name"),
-            data.at("tool_call").at("arguments").dump(),
-            /* id= */ "",
-        });
-    } else if (data.contains("response")) {
-        const auto & response = data.at("response");
-        result.content = response.is_string() ? response.get<std::string>() : response.dump(2);
-    }
-    return result;
+    }, args_paths);
 }
 
 static common_chat_params common_chat_params_init_mistral_nemo(const common_chat_template & tmpl, const struct templates_params & inputs) {
@@ -849,8 +1064,9 @@ static common_chat_params common_chat_params_init_mistral_nemo(const common_chat
     data.format = COMMON_CHAT_FORMAT_MISTRAL_NEMO;
     return data;
 }
-static common_chat_msg common_chat_parse_mistral_nemo(const std::string & input) {
-    return parse_prefixed_json_tool_call_array(input, "[TOOL_CALLS]");
+static void common_chat_parse_mistral_nemo(common_chat_msg_parser & builder) {
+    static const common_regex prefix(regex_escape("[TOOL_CALLS]"));
+    parse_prefixed_json_tool_call_array(builder, prefix);
 }
 
 static common_chat_params common_chat_params_init_command_r7b(const common_chat_template & tmpl, const struct templates_params & inputs) {
@@ -916,44 +1132,47 @@ static common_chat_params common_chat_params_init_command_r7b(const common_chat_
     data.format = inputs.extract_reasoning ? COMMON_CHAT_FORMAT_COMMAND_R7B_EXTRACT_REASONING : COMMON_CHAT_FORMAT_COMMAND_R7B;
     return data;
 }
-static common_chat_msg common_chat_parse_command_r7b(const std::string & input, bool extract_reasoning) {
-    static const std::regex thought_regex("(<\\|START_THINKING\\|>([\\s\\S]*?)<\\|END_THINKING\\|>)([\\s\\S]*)");
-    static const std::regex action_regex("<\\|START_ACTION\\|>([\\s\\S]*?)<\\|END_ACTION\\|>");
-    static const std::regex response_regex("(?:<\\|START_RESPONSE\\|>)?([\\s\\S]*?)<\\|END_RESPONSE\\|>");
 
-    std::smatch match;
+static void common_chat_parse_command_r7b(common_chat_msg_parser & builder) {
+    static const common_regex start_thinking_regex("<\\|START_THINKING\\|>", /* at_start= */ true);
+    static const common_regex end_thinking_regex("<\\|END_THINKING\\|>");
 
-    common_chat_msg result;
-    result.role = "assistant";
+    builder.try_consume_think_tags(start_thinking_regex, end_thinking_regex);
 
-    std::string rest = input;
+    static const common_regex start_action_regex("<\\|START_ACTION\\|>");
+    static const common_regex end_action_regex("<\\|END_ACTION\\|>", /* at_start= */ true);
+    static const common_regex start_response_regex("<\\|START_RESPONSE\\|>");
+    static const common_regex end_response_regex("<\\|END_RESPONSE\\|>");
 
-    if (std::regex_match(rest, match, thought_regex)) {
-        if (extract_reasoning) {
-            result.reasoning_content = match[2].str();
-        } else if (!match[2].str().empty()) {
-            // Let the unparsed thinking tags through in content only if their insides aren't empty.
-            result.content = match[1].str();
+    if (!builder.try_find_regex(start_action_regex, [&](const auto & prelude, const auto & /* groups */) {
+        // If we didn't extract thoughts, prelude includes them.
+        builder.result.content += prelude;
+        builder.consume_json([&](const common_json & partial) {
+            for (const auto & item : partial.json) {
+                std::string name = item.contains("tool_name") ? item.at("tool_name") : "";
+                std::string id = item.contains("tool_call_id") ? item.at("tool_call_id") : "";
+                std::string arguments = item.contains("parameters") ? item.at("parameters").dump() : "";
+                common_chat_tool_call tool_call;
+                if (!process_tool_call(name, id, arguments, partial.healing_marker, builder.result.tool_calls)) {
+                    builder.incomplete("incomplete tool call");
+                }
+            }
+        }, {{}});
+        builder.consume_regex(end_action_regex);
+    })) {
+        if (!builder.try_find_regex(start_response_regex, [&](const auto & prelude, const auto & /* groups */) {
+            // If we didn't extract thoughts, prelude includes them.
+            builder.result.content += prelude;
+            if (!builder.try_find_regex(end_response_regex, [&](const auto & prelude, const auto & /* groups */) {
+                builder.result.content += prelude;
+            })) {
+                builder.result.content += builder.consume_rest();
+                builder.incomplete("Expected end of response tag " + end_response_regex.str());
+            }
+        })) {
+            builder.result.content += builder.consume_rest();
         }
-        rest = match[3].str();
     }
-    if (std::regex_match(rest, match, action_regex)) {
-        auto actions_str = match[1].str();
-        auto actions = json::parse(actions_str);
-        for (const auto & action : actions) {
-            result.tool_calls.push_back({
-                /* .name = */      action.at("tool_name"),
-                /* .arguments = */ action.at("parameters").dump(),
-                /* .id = */        action.at("tool_call_id"),
-            });
-        }
-    } else if (std::regex_match(rest, match, response_regex)) {
-        auto response = match[1].str();
-        result.content += response;
-    } else {
-        result.content += rest;
-    }
-    return result;
 }
 
 static void expect_tool_parameters(const std::string & name, const json & parameters, const std::vector<std::string> & expected_properties) {
@@ -1049,38 +1268,53 @@ static common_chat_params common_chat_params_init_llama_3_1_tool_calls(const com
         : COMMON_CHAT_FORMAT_LLAMA_3_X;
     return data;
 }
-static common_chat_msg common_chat_parse_llama_3_1(const std::string & input, bool with_builtin_tools = false) {
-    // TODO: tighten & simplify the parser, don't accept leading text context.
-    static const std::regex function_regex(
-        "\\s*\\{\\s*(?:\"type\"\\s*:\\s*\"function\"\\s*,\\s*)?\"name\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"parameters\"\\s*: ");
-    static const std::regex close_regex("\\}\\s*");
-    static const std::regex builtin_call_regex("<\\|python_tag\\|>\\s*([^.(]+)\\s*\\.\\s*call\\s*\\(\\s*([\\w]+)\\s*=\\s*([\\s\\S]*?)\\)");
+static void common_chat_parse_llama_3_1(common_chat_msg_parser & builder, bool with_builtin_tools = false) {
+    static const common_regex function_regex(
+        "\\s*\\{\\s*(?:\"type\"\\s*:\\s*\"function\"\\s*,\\s*)?\"name\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"parameters\"\\s*: ", /* at_start= */ true);
+    static const common_regex close_regex("\\}\\s*", /* at_start= */ true);
+    static const common_regex builtin_call_regex("<\\|python_tag\\|>", /* at_start= */ true);
 
-    if (with_builtin_tools) {
-        std::smatch match;
-        if (std::regex_match(input, match, builtin_call_regex)) {
-            try {
-                auto name = match[1].str();
-                auto arg_name = match[2].str();
-                auto arg_value_str = match[3].str();
-                auto arg_value = json::parse(arg_value_str);
+    static const common_regex function_name_regex("\\s*(\\w+)\\s*\\.\\s*call\\(", /* at_start= */ true);
+    static const common_regex arg_name_regex("\\s*(\\w+)\\s*=\\s*", /* at_start= */ true);
 
-                common_chat_msg msg;
-                msg.role = "assistant";
-                msg.tool_calls.push_back({
-                    /* .name = */ name,
-                    /* .arguments = */ (json {
-                        {arg_name, arg_value},
-                    }).dump(),
-                    /* .id = */ "",
-                });
-                return msg;
-            } catch (const std::exception & e) {
-                LOG_WRN("Failed to parse builtin tool call arguments (%s): %s", e.what(), input.c_str());
+    if (with_builtin_tools && builder.try_find_regex(builtin_call_regex, [&](const auto & prelude, const auto & groups) {
+        builder.result.content += prelude;
+
+        builder.consume_regex(function_name_regex, [&](const auto & groups) {
+            auto function_name = builder.str(groups[1]);
+
+            common_healing_marker healing_marker;
+            json args = json::object();
+            while (true) {
+                if (builder.try_consume_regex(arg_name_regex, [&](const auto & groups) {
+                    auto arg_name = builder.str(groups[1]);
+                    builder.consume_json([&](const auto & partial) {
+                        args[arg_name] = partial.json;
+                        healing_marker.marker = partial.healing_marker.marker;
+                        healing_marker.json_dump_marker = partial.healing_marker.json_dump_marker;
+                    }, {{}});
+                })) {
+                    builder.consume_spaces();
+                    if (!builder.try_consume_literal(",")) {
+                        break;
+                    }
+                } else {
+                    break;
+                }
             }
-        }
+            builder.consume_literal(")");
+            builder.consume_spaces();
+
+            auto arguments = args.dump();
+            if (!process_tool_call(function_name, "", arguments, healing_marker, builder.result.tool_calls)) {
+                builder.incomplete("Incomplete tool call");
+            }
+        });
+    })) {
+        return;
     }
-    return parse_json_tool_calls(input, std::nullopt, function_regex, close_regex);
+    parse_json_tool_calls(builder, std::nullopt, function_regex, close_regex, std::nullopt);
+
 }
 
 static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_template & tmpl, const struct templates_params & inputs) {
@@ -1144,42 +1378,15 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
     data.format = inputs.extract_reasoning ? COMMON_CHAT_FORMAT_DEEPSEEK_R1_EXTRACT_REASONING : COMMON_CHAT_FORMAT_DEEPSEEK_R1;
     return data;
 }
-static common_chat_msg handle_think_tag_prelude(const std::string & input, bool extract_reasoning, const std::function<common_chat_msg(const std::string &)> & rest_parser) {
-    std::smatch match;
-    static const std::regex reasoning_content_regex("((?:<think>)?([\\s\\S\\r\\n]*?)</think>)?([\\s\\S\\r\\n]*)");
-    if (std::regex_match(input, match, reasoning_content_regex)) {
-        auto rest = match[3].str();
-        auto msg = rest_parser(rest);
-        auto reasoning_content = string_strip(match[2].str());
-        if (extract_reasoning) {
-            msg.reasoning_content = reasoning_content;
-        } else if (!reasoning_content.empty()) {
-            std::ostringstream content;
-            content << "<think>" << reasoning_content << "</think>" << msg.content;
-            msg.content = content.str();
-        }
-        return msg;
-    }
-    return rest_parser(input);
-}
-static common_chat_msg common_chat_parse_deepseek_r1(const std::string & input, bool extract_reasoning) {
-    return handle_think_tag_prelude(input, extract_reasoning, [](const std::string & input) {
-        static const std::regex function_regex("<｜tool▁call▁begin｜>function<｜tool▁sep｜>([^\n]+)\n```json\n");
-        static const std::regex close_regex("```[\\s\\r\\n]*<｜tool▁call▁end｜>");
-        static const std::regex tool_calls_regex("[\\s\\r\\n]*(?:<｜tool▁calls▁begin｜>|<｜tool_calls_begin｜>|<｜tool calls begin｜>|<｜tool\\\\_calls\\\\_begin｜>)([\\s\\S\\r\\n]*?)<｜tool▁calls▁end｜>");
+static void common_chat_parse_deepseek_r1(common_chat_msg_parser & builder) {
+    builder.try_consume_think_tags();
 
-        common_chat_msg msg;
-        msg.role = "assistant";
-        std::smatch match;
-        if (std::regex_search(input, match, tool_calls_regex)) {
-            auto tool_calls = match[1].str();
-            auto msg2 = parse_json_tool_calls(tool_calls, std::nullopt, function_regex, close_regex);
-            msg.tool_calls = std::move(msg2.tool_calls);
-        } else {
-            msg.content = input;
-        }
-        return msg;
-    });
+    static const common_regex tool_calls_begin("[\\s\\r\\n]*(?:<｜tool▁calls▁begin｜>|<｜tool_calls_begin｜>|<｜tool calls begin｜>|<｜tool\\\\_calls\\\\_begin｜>)");
+    static const common_regex tool_calls_end("<｜tool▁calls▁end｜>", /* at_start= */ true);
+    static const common_regex function_regex("<｜tool▁call▁begin｜>function<｜tool▁sep｜>([^\n]+)\n```json\n", /* at_start= */ true);
+    static const common_regex close_regex("```[\\s\\r\\n]*<｜tool▁call▁end｜>", /* at_start= */ true);
+
+    parse_json_tool_calls(builder, tool_calls_begin, function_regex, close_regex, tool_calls_end);
 }
 
 static common_chat_params common_chat_params_init_firefunction_v2(const common_chat_template & tmpl, const struct templates_params & inputs) {
@@ -1227,8 +1434,9 @@ static common_chat_params common_chat_params_init_firefunction_v2(const common_c
     }
     return data;
 }
-static common_chat_msg common_chat_parse_firefunction_v2(const std::string & input) {
-    return parse_prefixed_json_tool_call_array(input, " functools[", /* rstrip_prefix= */ 1);
+static void common_chat_parse_firefunction_v2(common_chat_msg_parser & builder) {
+    static const common_regex prefix(regex_escape(" functools["));
+    parse_prefixed_json_tool_call_array(builder, prefix, /* rstrip_prefix= */ 1);
 }
 
 static common_chat_params common_chat_params_init_functionary_v3_2(const common_chat_template & tmpl, const struct templates_params & inputs) {
@@ -1282,40 +1490,33 @@ static common_chat_params common_chat_params_init_functionary_v3_2(const common_
     }
     return data;
 }
+static void common_chat_parse_functionary_v3_2(common_chat_msg_parser & builder) {
+    static const common_regex function_regex(R"(>>>(\w+)\n)");
+    static const common_regex close_regex(R"(\s*)", /* at_start= */ true);
 
-static common_chat_msg common_chat_parse_functionary_v3_2(const std::string & input) {
-    static const std::regex function_regex(R"((?:>>>)?(?:assistant<|end_header_id|>\n)?(\w+)\n)");
-    static const std::regex close_regex(R"($|(?=>>>))");
+    static const common_regex initial_function_regex(R"((?:assistant<\|end_header_id\|>\n)?(\w+)\n\{\s*")", /* at_start= */ true);
 
-    std::string content;
-    auto it = input.begin();
-    const auto end = input.end();
-
-    if (parse_literal(it, end, "all\n")) {
-        std::smatch match;
-        if (std::regex_search(it, end, match, function_regex)) {
-            auto fun_it = match.prefix().second;
-            content = std::string(it, fun_it);
-            it = fun_it;
-        } else {
-            common_chat_msg res;
-            res.role = "assistant";
-            res.content = std::string(it, end);
-            return res;
+    builder.try_consume_regex(initial_function_regex, [&](const auto & groups) {
+        auto name = builder.str(groups[1]);
+        if (name == "all") {
+            builder.pos = 0;
+            builder.result.content = builder.consume_rest();
+            return;
         }
-    }
-    // TODO: tighten & simplify.
-    try {
-        auto res = parse_json_tool_calls(std::string(it, end), std::nullopt, function_regex, close_regex, /* allow_raw_python= */ true);
-        res.content = content + res.content;
-        return res;
-    } catch (const std::exception & e) {
-        LOG_ERR("Failed to parse functionary v3.2 input: %s\n", e.what());
-        common_chat_msg res;
-        res.role = "assistant";
-        res.content = input;
-        return res;
-    }
+        // Move to just after the function name + newline
+        builder.pos = groups[1].end + 1;
+        builder.consume_json([&](const auto & args) {
+            if (!process_tool_call(name, "", args.json.dump(), args.healing_marker, builder.result.tool_calls)) {
+                builder.incomplete("Incomplete tool call");
+            }
+        });
+        builder.consume_spaces();
+    });
+
+    parse_json_tool_calls(builder, std::nullopt, function_regex, close_regex, std::nullopt, /* allow_raw_python= */ true,
+        /* is_function= */ [&](const auto & name) {
+            return name != "all";
+        });
 }
 
 static common_chat_params common_chat_params_init_functionary_v3_1_llama_3_1(const common_chat_template & tmpl, const struct templates_params & inputs) {
@@ -1372,26 +1573,37 @@ static common_chat_params common_chat_params_init_functionary_v3_1_llama_3_1(con
     data.format = COMMON_CHAT_FORMAT_FUNCTIONARY_V3_1_LLAMA_3_1;
     return data;
 }
-static common_chat_msg common_chat_parse_functionary_v3_1_llama_3_1(const std::string & input) {
+static void common_chat_parse_functionary_v3_1_llama_3_1(common_chat_msg_parser & builder) {
     // This version of Functionary still supports the llama 3.1 tool call format for the python tool.
-    static const std::regex python_tag_regex(R"(<\|python_tag\|>([\s\S\n]*)$)");
-    std::smatch match;
-    if (std::regex_search(input, match, python_tag_regex)) {
-        auto code = match[1].str();
-        common_chat_msg msg;
-        msg.role = "assistant";
-        msg.content = match.prefix().str();
-        msg.tool_calls.push_back({
-            /* .name = */ "python",
-            /* .arguments = */ (json {{"code", code}}).dump(),
-            /* .id = */ "",
-        });
-        return msg;
+    static const common_regex python_tag_regex(regex_escape("<|python_tag|>"), /* at_start= */ true);
+
+    if (builder.try_find_regex(python_tag_regex, [&](const auto & prelude, const auto & /* groups */) {
+        builder.result.content += prelude;
+        auto code = builder.consume_rest();
+        std::string arguments;
+        if (builder.is_partial) {
+            std::string healing_marker = "$llama.cpp$";
+            arguments = (json {{"code", code + healing_marker}}).dump();
+            auto idx = arguments.find(healing_marker);
+            if (idx == std::string::npos) {
+                throw std::runtime_error("Healing marker not found in partial python tool call");
+            }
+            arguments = arguments.substr(0, idx);
+        } else {
+            arguments = (json {{"code", code}}).dump();
+        }
+        common_chat_tool_call tool_call;
+        tool_call.name = "python";
+        tool_call.arguments = arguments;
+        builder.result.tool_calls.emplace_back(tool_call);
+    })) {
+        return;
     }
-    static const std::regex function_regex(R"(<function=(\w+)>)");
-    static const std::regex close_regex(R"(</function>)");
-    // TODO: tighten & simplify.
-    return parse_json_tool_calls(input, std::nullopt, function_regex, close_regex);
+
+    static const common_regex function_regex(R"(<function=(\w+)>)", /* at_start= */ true);
+    static const common_regex close_regex(R"(</function>)", /* at_start= */ true);
+
+    parse_json_tool_calls(builder, std::nullopt, function_regex, close_regex, std::nullopt);
 }
 
 static common_chat_params common_chat_params_init_hermes_2_pro(const common_chat_template & tmpl, const struct templates_params & inputs) {
@@ -1481,120 +1693,89 @@ static common_chat_params common_chat_params_init_hermes_2_pro(const common_chat
     data.format = inputs.extract_reasoning ? COMMON_CHAT_FORMAT_HERMES_2_PRO_EXTRACT_REASONING : COMMON_CHAT_FORMAT_HERMES_2_PRO;
     return data;
 }
-static common_chat_msg common_chat_parse_hermes_2_pro(const std::string& input, bool extract_reasoning) {
-    return handle_think_tag_prelude(input, extract_reasoning, [](const std::string & input) {
-        static const std::regex open_regex(
-            "(?:"
-            "(```(?:xml|json)?\\n\\s*)?"         // match 1 (block_start)
-            "(<tool_call>"                   // match 2 (open_tag)
-            "|<function_call>"
-            "|<tool>"
-            "|<tools>"
-            "|<response>"
-            "|<json>"
-            "|<xml>"
-            "|<JSON>"
-            ")?"
-            "(\\s*\\{\\s*\"name\"\\s*:[\\s\\S]*)"    // match 3 (named tool call + rest)
-            ")"
-            "|"
-            "(?:<function=([^>]+)>"            // match 4 (function name)
-            "|<function name=\"([^\"]+)\">)" // match 5 (function name again)
-            "([\\s\\S]*)"                   // match 6 (function arguments + rest)})"
-        );
+static void common_chat_parse_hermes_2_pro(common_chat_msg_parser & builder) {
+    builder.try_consume_think_tags();
 
-        try {
-            common_chat_msg msg;
-            msg.role = "assistant";
+    static const common_regex open_regex(
+        "(?:"
+        "(```(?:xml|json)?\\n\\s*)?"         // match 1 (block_start)
+        "(<tool_call>"                   // match 2 (open_tag)
+        "|<function_call>"
+        "|<tool>"
+        "|<tools>"
+        "|<response>"
+        "|<json>"
+        "|<xml>"
+        "|<JSON>"
+        ")?"
+        "(\\s*\\{\\s*\"name\"\\s*:[\\s\\S]*)"    // match 3 (named tool call + rest)
+        ")"
+        "|"
+        "(?:<function=([^>]+)>"            // match 4 (function name)
+        "|<function name=\"([^\"]+)\">)" // match 5 (function name again)
+        "([\\s\\S]*)",                   // match 6 (function arguments + rest)})"
+        /* at_start= */ true
+    );
 
-            std::string::const_iterator it = input.begin();
-            const std::string::const_iterator end = input.end();
-            std::smatch match;
+    if (!builder.try_find_regex(open_regex, [&](const std::string & prelude, const common_string_ranges & groups) {
+        GGML_ASSERT(prelude.empty()); // matching at_start
 
-            while (it != end) {
-                if (std::regex_search(it, end, match, open_regex)) {
-                    // Add content before the match
-                    msg.content += std::string(it, match[0].first);
+        const auto & block_start = groups[1];
+        std::string block_end = block_start.empty() ? "" : "```";
 
-                    auto block_start = match[1].str();
-                    std::string block_end = block_start.empty() ? "" : "```";
+        const auto & open_tag = groups[2];
+        std::string close_tag;
 
-                    auto open_tag = match[2].str();
-                    std::string close_tag;
+        if (!groups[3].empty()) {
+            builder.pos = groups[3].begin;
+            close_tag = open_tag.empty() ? "" : "</" + builder.str(open_tag).substr(1);
 
-                    if (match[3].matched) {
-                        close_tag = open_tag.empty() ? "" : "</" + open_tag.substr(1);
-                        auto json_it = match[3].first;
-                        json tool_call;
-                        if (parse_json(json_it, end, tool_call) && tool_call.contains("name") && tool_call.contains("arguments")) {
-
-                            msg.tool_calls.emplace_back(process_tool_call(tool_call));
-                            it = json_it;  // Move iterator past parsed JSON
-
-                            // Handle close tags
-                            consume_spaces(it, end);
-                            if (!close_tag.empty() && !parse_literal(it, end, close_tag)) {
-                                throw std::runtime_error("Failed to parse closing tag");
-                            }
-                            consume_spaces(it, end);
-                            if (!block_end.empty() && !parse_literal(it, end, block_end)) {
-                                throw std::runtime_error("Failed to parse block end");
-                            }
-                            consume_spaces(it, end);
-                        } else {
-                            // Not a valid tool call, treat as content
-                            msg.content += std::string(match[0].first, match[0].second);
-                            it = match[0].second;
-                        }
-                    } else {
-                        auto function_name = match[4].str();
-                        if (function_name.empty()) {
-                            function_name = match[5].str();
-                        }
-                        GGML_ASSERT(!function_name.empty());
-
-                        close_tag = "</function>";
-                        // Start parsing from after the opening tags
-                        auto json_it = match[6].first;
-                        json arguments;
-                        if (parse_json(json_it, end, arguments)) {
-                            msg.tool_calls.emplace_back(process_tool_call({
-                                {"name", function_name},
-                                {"arguments", arguments},
-                            }));
-                            it = json_it;  // Move iterator past parsed JSON
-
-                            // Handle close tags
-                            consume_spaces(it, end);
-                            if (!close_tag.empty() && !parse_literal(it, end, close_tag)) {
-                                throw std::runtime_error("Failed to parse closing tag");
-                            }
-                            consume_spaces(it, end);
-                            if (!block_end.empty() && !parse_literal(it, end, block_end)) {
-                                throw std::runtime_error("Failed to parse block end");
-                            }
-                            consume_spaces(it, end);
-                        } else {
-                            // Not a valid tool call, treat as content
-                            msg.content += std::string(match[0].first, match[0].second);
-                            it = match[0].second;
-                        }
-                    }
-                } else {
-                    // Add remaining content
-                    msg.content += std::string(it, end);
-                    break;
+            if (!builder.try_consume_json([&](const auto & partial) {
+                if (!process_tool_call(partial.json, partial.healing_marker, builder.result.tool_calls)) {
+                    builder.incomplete("incomplete tool call");
+                    return;
                 }
+                builder.consume_spaces();
+                builder.consume_literal(close_tag);
+                builder.consume_spaces();
+                if (!block_end.empty()) {
+                    builder.consume_literal(block_end);
+                    builder.consume_spaces();
+                }
+            }, {{"arguments"}})) {
+                builder.result.content += builder.consume_rest();
             }
-            return msg;
-        } catch (const std::exception & e) {
-            LOG_ERR("Failed to parse hermes 2 pro input: %s\n", e.what());
-            common_chat_msg msg;
-            msg.role = "assistant";
-            msg.content = input;
-            return msg;
+        } else {
+            auto function_name = builder.str(groups[4]);
+            if (function_name.empty()) {
+                function_name = builder.str(groups[5]);
+            }
+            GGML_ASSERT(!function_name.empty());
+
+            close_tag = "</function>";
+
+            // Start parsing from after the opening tags
+            builder.pos = groups[6].begin;
+
+            builder.try_consume_json([&](const auto & partial) {
+                std::string arguments = partial.json.dump();
+                if (!process_tool_call(function_name, "", arguments, partial.healing_marker, builder.result.tool_calls)) {
+                    builder.incomplete("incomplete tool call");
+                    return;
+                }
+                builder.consume_spaces();
+                builder.consume_literal(close_tag);
+                builder.consume_spaces();
+                if (!block_end.empty()) {
+                    builder.consume_literal(block_end);
+                    builder.consume_spaces();
+                }
+            }, {{}});
+            builder.result.content += builder.consume_rest();
         }
-    });
+    })) {
+        builder.result.content += builder.consume_rest();
+    }
 }
 
 static common_chat_params common_chat_params_init_without_tools(const common_chat_template & tmpl, const struct templates_params & inputs) {
@@ -1774,44 +1955,101 @@ common_chat_params common_chat_templates_apply(
         : common_chat_templates_apply_legacy(tmpls, inputs);
 }
 
-static common_chat_msg common_chat_parse_content_only(const std::string & input) {
-    common_chat_msg msg;
-    msg.role = "assistant";
-    msg.content = input;
-    return msg;
+static void common_chat_parse_content_only(common_chat_msg_parser & builder) {
+    builder.result.content += builder.consume_rest();
 }
 
-common_chat_msg common_chat_parse(const std::string & input, common_chat_format format) {
+static void common_chat_parse(common_chat_msg_parser & builder, common_chat_format format) {
+    LOG_DBG("Parsing input with format %s: %s\n", common_chat_format_name(format).c_str(), builder.input.c_str());
+
     switch (format) {
         case COMMON_CHAT_FORMAT_CONTENT_ONLY:
-            return common_chat_parse_content_only(input);
+            common_chat_parse_content_only(builder);
+            break;
         case COMMON_CHAT_FORMAT_GENERIC:
-            return common_chat_parse_generic(input);
+            common_chat_parse_generic(builder);
+            break;
         case COMMON_CHAT_FORMAT_MISTRAL_NEMO:
-            return common_chat_parse_mistral_nemo(input);
+            common_chat_parse_mistral_nemo(builder);
+            break;
         case COMMON_CHAT_FORMAT_LLAMA_3_X:
-            return common_chat_parse_llama_3_1(input);
+            common_chat_parse_llama_3_1(builder);
+            break;
         case COMMON_CHAT_FORMAT_LLAMA_3_X_WITH_BUILTIN_TOOLS:
-            return common_chat_parse_llama_3_1(input, /* with_builtin_tools= */ true);
+            common_chat_parse_llama_3_1(builder, /* with_builtin_tools= */ true);
+            break;
         case COMMON_CHAT_FORMAT_DEEPSEEK_R1:
-            return common_chat_parse_deepseek_r1(input, /* extract_reasoning= */ false);
         case COMMON_CHAT_FORMAT_DEEPSEEK_R1_EXTRACT_REASONING:
-            return common_chat_parse_deepseek_r1(input, /* extract_reasoning= */ true);
+            common_chat_parse_deepseek_r1(builder);
+            break;
         case COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2:
-            return common_chat_parse_functionary_v3_2(input);
+            common_chat_parse_functionary_v3_2(builder);
+            break;
         case COMMON_CHAT_FORMAT_FUNCTIONARY_V3_1_LLAMA_3_1:
-            return common_chat_parse_functionary_v3_1_llama_3_1(input);
+            common_chat_parse_functionary_v3_1_llama_3_1(builder);
+            break;
         case COMMON_CHAT_FORMAT_HERMES_2_PRO:
-            return common_chat_parse_hermes_2_pro(input, /* extract_reasoning= */ false);
         case COMMON_CHAT_FORMAT_HERMES_2_PRO_EXTRACT_REASONING:
-            return common_chat_parse_hermes_2_pro(input, /* extract_reasoning= */ true);
+            common_chat_parse_hermes_2_pro(builder);
+            break;
         case COMMON_CHAT_FORMAT_FIREFUNCTION_V2:
-            return common_chat_parse_firefunction_v2(input);
+            common_chat_parse_firefunction_v2(builder);
+            break;
         case COMMON_CHAT_FORMAT_COMMAND_R7B:
-            return common_chat_parse_command_r7b(input, /* extract_reasoning= */ false);
         case COMMON_CHAT_FORMAT_COMMAND_R7B_EXTRACT_REASONING:
-            return common_chat_parse_command_r7b(input, /* extract_reasoning= */ true);
+            common_chat_parse_command_r7b(builder);
+            break;
         default:
             throw std::runtime_error("Unsupported format: " + common_chat_format_name(format));
     }
+    builder.finish();
+}
+
+common_chat_msg common_chat_parse(const std::string & input, common_chat_format format, bool is_partial, const std::vector<common_regex> & trigger_regexes) {
+    auto extract_reasoning = format == COMMON_CHAT_FORMAT_DEEPSEEK_R1_EXTRACT_REASONING
+        || format == COMMON_CHAT_FORMAT_HERMES_2_PRO_EXTRACT_REASONING
+        || format == COMMON_CHAT_FORMAT_COMMAND_R7B_EXTRACT_REASONING;
+
+    if (is_partial) {
+        bool found_trigger = false;
+        auto earliest_partial_trigger = std::string::npos;
+
+        for (const auto & trigger_regex : trigger_regexes) {
+            auto match = trigger_regex.search(input, 0);
+            if (match.type == COMMON_REGEX_MATCH_TYPE_PARTIAL) {
+                earliest_partial_trigger = std::min(earliest_partial_trigger, match.groups[0].begin);
+            } else if (match.type == COMMON_REGEX_MATCH_TYPE_FULL) {
+                if (match.groups[0].begin < earliest_partial_trigger) {
+                    found_trigger = true;
+                    break;
+                }
+            }
+        }
+
+        if (!found_trigger && earliest_partial_trigger != std::string::npos) {
+            // Stop stopping at the earliest partial trigger to avoid messing the parsing big time.
+            auto before_trigger = input.substr(0, earliest_partial_trigger);
+            if (before_trigger.empty()) {
+                return {};
+            }
+            common_chat_msg_parser builder(before_trigger, is_partial, extract_reasoning);
+            try {
+                common_chat_parse(builder, format);
+            } catch (const common_chat_msg_partial_exception & ex) {
+                LOG_DBG("Partial parse: %s\n", ex.what());
+            }
+            return builder.result;
+        }
+    }
+
+    common_chat_msg_parser builder(input, is_partial, extract_reasoning);
+    try {
+        common_chat_parse(builder, format);
+    } catch (const common_chat_msg_partial_exception & ex) {
+        LOG_DBG("Partial parse: %s\n", ex.what());
+        if (!is_partial) {
+            throw std::runtime_error(ex.what());
+        }
+    }
+    return builder.result;
 }

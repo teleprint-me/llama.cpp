@@ -3,6 +3,7 @@
 #pragma once
 
 #include "common.h"
+#include "regex-partial.h"
 #include <string>
 #include <vector>
 
@@ -21,6 +22,10 @@ struct common_chat_tool_call {
 struct common_chat_msg_content_part {
     std::string type;
     std::string text;
+
+    bool operator==(const common_chat_msg_content_part & other) const {
+        return type == other.type && text == other.text;
+    }
 };
 
 struct common_chat_msg {
@@ -34,6 +39,18 @@ struct common_chat_msg {
 
     bool empty() const {
         return content.empty() && content_parts.empty() && tool_calls.empty() && reasoning_content.empty() && tool_name.empty() && tool_call_id.empty();
+    }
+    bool operator==(const common_chat_msg & other) const {
+        return role == other.role
+            && content == other.content
+            && content_parts == other.content_parts
+            && tool_calls == other.tool_calls
+            && reasoning_content == other.reasoning_content
+            && tool_name == other.tool_name
+            && tool_call_id == other.tool_call_id;
+    }
+    bool operator!=(const common_chat_msg & other) const {
+        return !(*this == other);
     }
 };
 
@@ -128,7 +145,7 @@ std::string common_chat_format_example(
     bool use_jinja);
 
 std::string               common_chat_format_name(common_chat_format format);
-common_chat_msg           common_chat_parse(      const std::string & input, common_chat_format format);
+common_chat_msg           common_chat_parse(const std::string & input, common_chat_format format, bool is_partial = false, const std::vector<common_regex> & trigger_regexes = {});
 
 common_chat_tool_choice common_chat_tool_choice_parse_oaicompat(const std::string & tool_choice);
 
