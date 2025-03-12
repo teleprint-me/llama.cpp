@@ -58,6 +58,8 @@ add_library(${TARGET} STATIC
     base64.hpp
     chat.cpp
     chat.h
+    chat-parser.cpp
+    chat-parser.h
     common.cpp
     common.h
     console.cpp

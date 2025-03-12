@@ -474,6 +474,15 @@ const common_chat_msg message_assist_call_idx {
     /* .tool_name = */ "",
     /* .tool_call_id = */ "",
 };
+const common_chat_msg message_assist_thoughts_call_idx {
+    "assistant",
+    "",
+    /* .content_parts = */ {},
+    tool_calls_idx,
+    /* .reasoning_content = */ "I'm\nthinking",
+    /* .tool_name = */ "",
+    /* .tool_call_id = */ "",
+};
 const common_chat_msg message_assist_call_python {
     "assistant",
     "",
@@ -667,6 +676,13 @@ static void test_template_output_parsers() {
             common_chat_parse(
                 "<|START_THINKING|>I'm thinking<|END_THINKING|>"
                 "<|START_RESPONSE|>Hello, world!\nWhat's up?<|END_RESPONSE|>",
+                COMMON_CHAT_FORMAT_COMMAND_R7B_EXTRACT_REASONING));
+        assert_msg_equals(message_assist_thoughts_call_idx,
+            common_chat_parse(
+                "<|START_THINKING|>I'm\nthinking<|END_THINKING|>"
+                "<|START_ACTION|>[\n"
+                "    {\"tool_call_id\": \"0\", \"tool_name\": \"special_function\", \"parameters\": {\"arg1\": 1}}\n"
+                "]<|END_ACTION|>",
                 COMMON_CHAT_FORMAT_COMMAND_R7B_EXTRACT_REASONING));
 
         test_templates(tmpls.get(), end_tokens, message_assist_call_idx, tools,
