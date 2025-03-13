@@ -22,10 +22,8 @@ common_regex_match common_regex::search(const std::string & input, size_t pos, b
             common_regex_match res;
             res.type = COMMON_REGEX_MATCH_TYPE_FULL;
             for (size_t i = 0; i < match.size(); ++i) {
-                common_string_range group;
-                group.begin = pos + match.position(i);
-                group.end = group.begin + match.length(i);
-                res.groups.push_back(group);
+                auto begin = pos + match.position(i);
+                res.groups.emplace_back(begin, begin + match.length(i));
             }
             return res;
         }
@@ -33,20 +31,25 @@ common_regex_match common_regex::search(const std::string & input, size_t pos, b
     std::match_results<std::string::const_reverse_iterator> srmatch;
     if (std::regex_match(input.rbegin(), input.rend() - pos, srmatch, rx_reversed_partial)) {
         auto group = srmatch[1].str();
-        auto it = srmatch[1].second.base();
-        // auto position = static_cast<size_t>(std::distance(input.begin(), it));
-        if ((!as_match && !at_start_) || it == input.begin()) {
-            common_regex_match res;
-            res.type = COMMON_REGEX_MATCH_TYPE_PARTIAL;
-            //res.groups.push_back({input.substr(position), position, input.size()});
-            res.groups.push_back({pos + std::distance(input.begin(), it), input.size()});
-            return res;
+        if (group.length() != 0) {
+            auto it = srmatch[1].second.base();
+            // auto position = static_cast<size_t>(std::distance(input.begin(), it));
+            if ((!as_match && !at_start_) || it == input.begin()) {
+                common_regex_match res;
+                res.type = COMMON_REGEX_MATCH_TYPE_PARTIAL;
+                auto begin = std::distance(input.begin(), it);
+                GGML_ASSERT(begin >= 0);
+                auto end = input.size();//begin + group.length();
+                GGML_ASSERT(static_cast<size_t>(begin) <= end);
+                res.groups.push_back({static_cast<size_t>(begin), end});
+                return res;
+            }
         }
     }
     return {};
 }
 
-/*
+/*xz
   Transforms a regex pattern to a partial match pattern that operates on a reversed input string to find partial final matches of the original pattern.
 
   Ideally we'd like to use boost::match_partial (https://beta.boost.org/doc/libs/1_59_0/libs/regex/doc/html/boost_regex/partial_matches.html)

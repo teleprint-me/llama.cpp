@@ -8,8 +8,6 @@
 #include <string>
 #include <vector>
 
-using common_string_ranges = std::vector<common_string_range>;
-
 class common_chat_msg_partial_exception : public std::runtime_error {
   public:
     common_chat_msg_partial_exception(const std::string & message) : std::runtime_error(message) {}
@@ -18,18 +16,17 @@ class common_chat_msg_partial_exception : public std::runtime_error {
 class common_chat_msg_parser {
     std::string input_;
     bool is_partial_;
-    bool extract_reasoning_;
+    common_chat_reasoning_syntax reasoning_syntax_;
+
     size_t pos_ = 0;
     common_chat_msg result_;
     std::string healing_marker_;
 
   public:
-    common_chat_msg_parser(const std::string & input, bool is_partial, bool extract_reasoning);
-
+    common_chat_msg_parser(const std::string & input, bool is_partial, const common_chat_reasoning_syntax & reasoning_syntax);
     const std::string & input() const { return input_; }
     const std::string & healing_marker() const { return healing_marker_; }
     const bool & is_partial() const { return is_partial_; }
-    const bool & extract_reasoning() const { return extract_reasoning_; }
     const common_chat_msg & result() const { return result_; }
 
     void move_to(size_t pos) {
@@ -70,13 +67,13 @@ class common_chat_msg_parser {
 
     struct find_regex_result {
         std::string prelude;
-        common_string_ranges groups;
+        std::vector<common_string_range> groups;
     };
 
     std::optional<find_regex_result> try_find_regex(const common_regex & regex);
 
     struct consume_regex_result {
-        common_string_ranges groups;
+        std::vector<common_string_range> groups;
     };
     consume_regex_result consume_regex(const common_regex & regex);
 

@@ -12,8 +12,8 @@
 
 using json = nlohmann::ordered_json;
 
-common_chat_msg_parser::common_chat_msg_parser(const std::string & input, bool is_partial, bool extract_reasoning)
-    : input_(input), is_partial_(is_partial), extract_reasoning_(extract_reasoning)
+common_chat_msg_parser::common_chat_msg_parser(const std::string & input, bool is_partial, const common_chat_reasoning_syntax & reasoning_syntax)
+    : input_(input), is_partial_(is_partial), reasoning_syntax_(reasoning_syntax)
 {
     result_.role = "assistant";
 
@@ -129,14 +129,17 @@ void common_chat_msg_parser::consume_literal(const std::string & literal) {
 }
 
 void common_chat_msg_parser::try_consume_think_tags(const common_regex & start_think_regex, const common_regex & end_think_regex) {
-    if (extract_reasoning_) {
-        if (try_consume_regex(start_think_regex)) {
+    if (reasoning_syntax_.format != COMMON_REASONING_FORMAT_NONE) {
+        if (reasoning_syntax_.thinking_forced_open || try_consume_regex(start_think_regex)) {
             if (auto res = try_find_regex(end_think_regex)) {
                 result_.reasoning_content = res->prelude;
                 consume_spaces();
             } else {
                 result_.reasoning_content = consume_rest();
-                incomplete("Failed to find end of reasoning tag " + end_think_regex.str());
+                if (!reasoning_syntax_.thinking_forced_open) {
+                    incomplete("Failed to find end of reasoning tag " + end_think_regex.str());
+                }
+                return;
             }
         } else if (auto res = try_find_regex(end_think_regex)) {
             result_.reasoning_content = res->prelude;
