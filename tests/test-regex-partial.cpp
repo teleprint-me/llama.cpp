@@ -25,103 +25,8 @@ struct test_case {
 };
 
 static void test_regex() {
-    std::vector<test_case> test_cases {
-        test_case {
-            "a",
-            {
-                {"a", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 1}}}},
-                {"b", {COMMON_REGEX_MATCH_TYPE_NONE, {}}},
-                {"ab", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 1}}}},
-                {"ba", {COMMON_REGEX_MATCH_TYPE_FULL, {{1, 2}}}},
-            }
-        },
-        test_case {
-            "abcd",
-            {
-                {"abcd", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 4}}}},
-                {"abcde", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 4}}}},
-                {"abc", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 3}}}},
-                {"ab", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 2}}}},
-                {"a", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 1}}}},
-                {"d", {}},
-                {"bcd", {}},
-                {"cde", {}},
-                {"cd", {}},
-                {"yeah ab", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{5, 7}}}},
-                {"abbie", {}},
-                {"", {}},
-            }
-        },
-        test_case {
-            ".*?ab",
-            {
-                {"ab", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 2}}}},
-                {"abc", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 2}}}},
-                {"dab", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 3}}}},
-                {"dabc", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 3}}}},
-                {"da", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 2}}}},
-                {"d", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 1}}}},
-            }
-        },
-        test_case {
-            "a.*?b",
-            {
-                {"ab", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 2}}}},
-                {"abc", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 2}}}},
-                {"a b", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 3}}}},
-                {"a", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 1}}}},
-                {"argh", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 4}}}},
-                {"d", {}},
-                {"b", {}},
-            }
-        },
-        test_case {
-            "ab(?:cd){2,4}ef",
-            {
-                // {"ab", {COMMON_REGEX_MATCH_TYPE_PARTIAL, 0, {}}},
-                {"ab", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 2}}}},
-                {"abcd", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 4}}}},
-                {"abcde", {}},
-                {"abcdef", {}},
-                {"abcdcd", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 6}}}},
-                {"abcdcde", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 7}}}},
-                {"abcdcdef", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 8}}}},
-                {"abcdcdcdcdef", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 12}}}},
-                {"abcdcdcdcdcdef", {}},
-                {"abcde", {}},
-                {"yea", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{2, 3}}}},
-            }
-        },
-        test_case {
-            "a(?:rte| pure )fact",
-            {
-                {"a", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 1}}}},
-                {"art", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 3}}}},
-                {"artefa", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 6}}}},
-                {"fact", {}},
-                {"an arte", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{3, 7}}}},
-                {"artefact", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 8}}}},
-                {"an artefact", {COMMON_REGEX_MATCH_TYPE_FULL, {{3, 11}}}},
-                {"a pure", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 6}}}},
-                {"a pure fact", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 11}}}},
-                {"it's a pure fact", {COMMON_REGEX_MATCH_TYPE_FULL, {{5, 16}}}},
-                {"" , {}},
-                {"pure", {}},
-                {"pure fact", {}},
-            }
-        },
-        test_case {
-            "abc",
-            {
-                {" abcc", {}},
-                {"ab", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 2}}}},
-                {"abc", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 3}}}},
-                {" ab", {}},
-            }
-        },
-    };
 
-    for (const auto & test_case : test_cases) {
+    auto test = [](const test_case & test_case) {
         common_regex cr(test_case.pattern);
         std::cout << "Testing pattern: /" << test_case.pattern << "/\n";
         // std::cout << "    partial rev: " << cr.reversed_partial_pattern.str() << '\n';
@@ -134,6 +39,7 @@ static void test_regex() {
                     if (m->type == COMMON_REGEX_MATCH_TYPE_NONE) {
                         ss << "<no match>";
                     } else {
+                        GGML_ASSERT(!input_output.output.groups.empty());
                         ss << "begin = " << input_output.output.groups[0].begin << ", end =" << input_output.output.groups[0].end << ", type = " << (m->type == COMMON_REGEX_MATCH_TYPE_PARTIAL ? "partial" : m->type == COMMON_REGEX_MATCH_TYPE_FULL ? "full" : "none") << ", groups.length = " << m->groups.size();
                     }
                     return ss.str();
@@ -145,7 +51,104 @@ static void test_regex() {
                 throw std::runtime_error("Test failed");
             }
         }
-    }
+    };
+    test({
+        "a",
+        {
+            {"a", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 1}}}},
+            {"b", {COMMON_REGEX_MATCH_TYPE_NONE, {}}},
+            {"ab", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 1}}}},
+            {"ba", {COMMON_REGEX_MATCH_TYPE_FULL, {{1, 2}}}},
+        }
+    });
+    test({
+        "abcd",
+        {
+            {"abcd", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 4}}}},
+            {"abcde", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 4}}}},
+            {"abc", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 3}}}},
+            {"ab", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 2}}}},
+            {"a", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 1}}}},
+            {"d", {}},
+            {"bcd", {}},
+            {"cde", {}},
+            {"cd", {}},
+            {"yeah ab", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{5, 7}}}},
+            {"abbie", {}},
+            {"", {}},
+        }
+    });
+    test({
+        ".*?ab",
+        {
+            {"ab", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 2}}}},
+            {"abc", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 2}}}},
+            {"dab", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 3}}}},
+            {"dabc", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 3}}}},
+            {"da", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 2}}}},
+            {"d", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 1}}}},
+        }
+    });
+    test({
+        "a.*?b",
+        {
+            {"ab", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 2}}}},
+            {"abc", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 2}}}},
+            {"a b", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 3}}}},
+            {"a", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 1}}}},
+            {"argh", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 4}}}},
+            {"d", {}},
+            {"b", {}},
+        }
+    });
+    test({
+        "ab(?:cd){2,4}ef",
+        {
+            // {"ab", {COMMON_REGEX_MATCH_TYPE_PARTIAL, 0, {}}},
+            {"ab", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 2}}}},
+            {"abcd", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 4}}}},
+            {"abcde", {}},
+            {"abcdef", {}},
+            {"abcdcd", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 6}}}},
+            {"abcdcde", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 7}}}},
+            {"abcdcdef", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 8}}}},
+            {"abcdcdcdcdef", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 12}}}},
+            {"abcdcdcdcdcdef", {}},
+            {"abcde", {}},
+            {"yea", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{2, 3}}}},
+        }
+    });
+    test({
+        "a(?:rte| pure )fact",
+        {
+            {"a", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 1}}}},
+            {"art", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 3}}}},
+            {"artefa", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 6}}}},
+            {"fact", {}},
+            {"an arte", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{3, 7}}}},
+            {"artefact", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 8}}}},
+            {"an artefact", {COMMON_REGEX_MATCH_TYPE_FULL, {{3, 11}}}},
+            {"a pure", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 6}}}},
+            {"a pure fact", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 11}}}},
+            {"it's a pure fact", {COMMON_REGEX_MATCH_TYPE_FULL, {{5, 16}}}},
+            {"" , {}},
+            {"pure", {}},
+            {"pure fact", {}},
+        }
+    });
+    test({
+        "abc",
+        {
+            {" abcc", {COMMON_REGEX_MATCH_TYPE_FULL, {{1, 4}}}},
+            {"ab", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 2}}}},
+            {"abc", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 3}}}},
+            {" ab", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{1, 3}}}},
+            {"a", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 1}}}},
+            {"b", {}},
+            {"c", {}},
+            {"", {}},
+        }
+    });
 }
 
 static void test_regex_to_reversed_partial_regex() {
