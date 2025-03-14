@@ -25,6 +25,7 @@ class common_chat_msg_parser {
   public:
     common_chat_msg_parser(const std::string & input, bool is_partial, const common_chat_reasoning_syntax & reasoning_syntax);
     const std::string & input() const { return input_; }
+    size_t pos() const { return pos_; }
     const std::string & healing_marker() const { return healing_marker_; }
     const bool & is_partial() const { return is_partial_; }
     const common_chat_msg & result() const { return result_; }
@@ -79,7 +80,7 @@ class common_chat_msg_parser {
         std::vector<common_string_range> groups;
     };
 
-    std::optional<find_regex_result> try_find_regex(const common_regex & regex);
+    std::optional<find_regex_result> try_find_regex(const common_regex & regex, size_t from = std::string::npos);
 
     struct consume_regex_result {
         std::vector<common_string_range> groups;

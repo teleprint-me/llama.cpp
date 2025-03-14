@@ -561,23 +561,51 @@ static void parse_json_tool_calls(
     const common_regex & close_regex,
     const std::optional<common_regex> & block_close,
     bool allow_raw_python = false,
-    const std::function<bool(const std::string & name)> & is_function = nullptr) {
+    const std::function<std::string(const common_chat_msg_parser::find_regex_result & fres)> & get_function_name = nullptr) {
 
     auto parse_tool_calls = [&]() {
+        size_t from = std::string::npos;
         while (true) {
-            if (auto res = builder.try_find_regex(function_regex)) {
-                GGML_ASSERT(res->groups.size() == 2);
-                auto name = builder.str(res->groups[1]);
+            if (auto res = builder.try_find_regex(function_regex, from)) {
+                std::string name;
+                if (get_function_name) {
+                    name = get_function_name(*res);
+                } else {
+                    GGML_ASSERT(res->groups.size() == 2);
+                    name = builder.str(res->groups[1]);
+                }
+                if (name.empty()) {
+                    // get_function_name signalled us that we should skip this match and treat it as content.
+                    from = res->groups[0].begin + 1;
+                    continue;
+                } else {
+                    from = std::string::npos;
+                }
                 builder.add_content(res->prelude);
-                if (is_function && !is_function(name)) {
+                if (auto partial = builder.try_consume_json({{}})) {
+                    std::string arguments = partial->json.dump();
+                    if (!builder.add_tool_call(name, "", arguments, partial->healing_marker)) {
+                        builder.incomplete("incomplete tool call");
+                    }
+                    builder.consume_regex(close_regex);
+                } else if (name == "python" && allow_raw_python) {
+                    auto code = builder.consume_rest();
+                    std::string arguments;
+                    common_healing_marker healing_marker;
+                    if (builder.is_partial()) {
+                        healing_marker.json_dump_marker = healing_marker.marker = builder.healing_marker();
+                        arguments = (json {{"code", code + healing_marker.marker}}).dump();
+                    } else {
+                        arguments = (json {{"code", code}}).dump();
+                    }
+                    if (!builder.add_tool_call(name, "", arguments, healing_marker)) {
+                        builder.incomplete("incomplete tool call");
+                    }
+                    return;
+                } else {
+                    builder.incomplete("incomplete tool call");
                     return;
                 }
-                auto partial = builder.consume_json({{}});
-                std::string arguments = partial.json.dump();
-                if (!builder.add_tool_call(name, "", arguments, partial.healing_marker)) {
-                    builder.incomplete("incomplete tool call");
-                }
-                builder.consume_regex(close_regex);
             } else {
                 break;
             }
@@ -863,7 +891,7 @@ static common_chat_params common_chat_params_init_command_r7b(const common_chat_
         if (!inputs.parallel_tool_calls) {
             schema["maxItems"] = 1;
         }
-        builder.add_rule("root", 
+        builder.add_rule("root",
             std::string(data.thinking_forced_open ? "\"<|END_THINKING|>\" space " : "") +
             "\"<|START_ACTION|>\" " + builder.add_schema("tool_calls", schema) + " \"<|END_ACTION|>\"");
     });
@@ -1193,6 +1221,7 @@ static void common_chat_parse_firefunction_v2(common_chat_msg_parser & builder) 
 static common_chat_params common_chat_params_init_functionary_v3_2(const common_chat_template & tmpl, const struct templates_params & inputs) {
     // >>>all\nlet's call functions>>>fn1\n{"arg1": 1...}\n>>>fn2\n{"arg1": 1...}...
     // Using ">>>f1\n", ">>>f2\n"... as trigger words for the grammar
+    // If the function is python, we also allow raw python code (if the line after `python\n` doesn't start w/ opening `{`), which the model seems to prefer for multiline code.
     common_chat_params data;
     data.prompt = apply(tmpl, inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
     data.format = COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2;
@@ -1206,24 +1235,17 @@ static common_chat_params common_chat_params_init_functionary_v3_2(const common_
                 std::string name = function.at("name");
                 auto parameters = function.at("parameters");
                 builder.resolve_refs(parameters);
+                std::string args_pattern = "[\\s\\S]*";
                 auto args_rule = builder.add_schema(name + "-args", parameters);
+                if (name == "python") {
+                    args_pattern = "\\{" + args_pattern;
+                    args_rule = builder.add_rule(name + "-maybe-raw-args", args_rule + " | [^{] .*");
+                }
                 first_tool_rules.push_back(builder.add_rule(name + "-call", "( \"assistant<|end_header_id|>\\n\" )? \"" + name + "\\n\" " + args_rule));
                 subsequent_tool_rules.push_back(builder.add_rule(name + "-call2", "\">>>" + name + "\\n\" " + args_rule));
                 data.grammar_triggers.push_back({
                     COMMON_GRAMMAR_TRIGGER_TYPE_PATTERN_FULL,
-                    "(" + regex_escape(name + "\n") + ")[\\s\\S]*",
-                });
-                data.grammar_triggers.push_back({
-                    COMMON_GRAMMAR_TRIGGER_TYPE_PATTERN_FULL,
-                    "(" + regex_escape("assistant<|end_header_id|>\n" + name + "\n") + ")[\\s\\S]*",
-                });
-                data.grammar_triggers.push_back({
-                    COMMON_GRAMMAR_TRIGGER_TYPE_WORD,
-                    regex_escape(">>>" + name + "\n"),
-                });
-                data.grammar_triggers.push_back({
-                    COMMON_GRAMMAR_TRIGGER_TYPE_WORD,
-                    ">>>assistant<|end_header_id|>\n" + name,
+                    "((?:[\\s\\S]*?>>>)?" + regex_escape(name) + "\n)" + args_pattern,
                 });
             });
             data.preserved_tokens = {
@@ -1242,30 +1264,27 @@ static common_chat_params common_chat_params_init_functionary_v3_2(const common_
     return data;
 }
 static void common_chat_parse_functionary_v3_2(common_chat_msg_parser & builder) {
-    static const common_regex function_regex(R"(>>>(\w+)\n)");
+    static const common_regex function_regex(R"((>>>)?(\w+\n\{|python\n|all\n))");
     static const common_regex close_regex(R"(\s*)", /* at_start= */ true);
 
-    static const common_regex initial_function_regex(R"((?:assistant<\|end_header_id\|>\n)?(\w+)\n\{\s*")", /* at_start= */ true);
-
-    if (auto res = builder.try_consume_regex(initial_function_regex)) {
-        auto name = builder.str(res->groups[1]);
-        if (name == "all") {
-            builder.move_to(res->groups[1].end + 1);
-            builder.add_content(builder.consume_rest());
-            return;
-        }
-        // Move to just after the function name + newline
-        builder.move_to(res->groups[1].end + 1);
-        auto args = builder.consume_json({{}});
-        if (!builder.add_tool_call(name, "", args.json.dump(), args.healing_marker)) {
-            builder.incomplete("Incomplete tool call");
-        }
-        builder.consume_spaces();
-    }
-
     parse_json_tool_calls(builder, std::nullopt, function_regex, close_regex, std::nullopt, /* allow_raw_python= */ true,
-        /* is_function= */ [&](const auto & name) {
-            return name != "all";
+        /* get_function_name= */ [&](const auto & res) -> std::string {
+            auto at_start = res.groups[0].begin == 0;
+            if (at_start != res.groups[1].empty()) {
+                // Only accept >>> as a match if it's not at the beginning.
+                return "";
+            }
+            auto name = builder.str(res.groups[2]);
+            if (!name.empty() && name.back() == '{') {
+                // Unconsume the opening brace '{' to ensure the JSON parsing goes well.
+                builder.move_back(1);
+            }
+            auto idx = name.find_last_not_of("\n{");
+            name = name.substr(0, idx + 1);
+            if (at_start && name == "all") {
+                return "";
+            }
+            return name;
         });
 }
 

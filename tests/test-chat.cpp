@@ -402,6 +402,9 @@ const std::vector<common_chat_tool_call> tool_calls_idx {
 const std::vector<common_chat_tool_call> tool_calls_id {
     { "special_function", "{\"arg1\": 1}", /* .id = */ "123456789" },
 };
+const std::vector<common_chat_tool_call> tool_calls_python {
+    { "python", "{\"code\": \"print('hey')\"}", /* .id = */ "" },
+};
 
 const common_chat_msg message_assist_empty {
     "assistant",
@@ -488,7 +491,7 @@ const common_chat_msg message_assist_call_python {
     "assistant",
     "",
     /* .content_parts = */ {},
-    { { "python", "{\"code\": \"print('hey')\"}", /* .id = */ "" } },
+    tool_calls_python,
     /* .reasoning_content = */ "",
     /* .tool_name = */ "",
     /* .tool_call_id = */ "",
@@ -977,10 +980,38 @@ static void test_template_output_parsers() {
         assert_equals(COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2, common_chat_templates_apply(tmpls.get(), inputs_no_tools).format);
         assert_equals(COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2, common_chat_templates_apply(tmpls.get(), inputs_tools).format);
 
+        assert_msg_equals(
+            common_chat_msg {
+                "assistant",
+                "Hello, world!\nnono\nWhat's up?",
+                /* .content_parts = */ {},
+                /* .tool_calls = */ tool_calls,
+                /* .reasoning_content = */ "",
+                /* .tool_name = */ "",
+                /* .tool_call_id = */ ""
+            },
+            common_chat_parse(
+                "all\n"
+                "Hello, world!\n"
+                "nono\n"
+                "What's up?\n"
+                ">>>special_function\n"
+                "{\"arg1\": 1}\n",
+                COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2));
+        assert_msg_equals(message_assist_call_python,
+            common_chat_parse(
+                "python\n"
+                "print('hey')",
+                COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2));
         assert_msg_equals(message_assist_call,
             common_chat_parse(
                 "special_function\n"
                 "{\"arg1\": 1} \n                    ",
+                COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2));
+        assert_msg_equals(message_assist,
+            common_chat_parse(
+                "all\n"
+                "Hello, world!\nWhat's up?",
                 COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2));
 
         test_templates(tmpls.get(), end_tokens, message_assist, {},

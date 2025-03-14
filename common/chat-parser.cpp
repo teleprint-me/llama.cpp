@@ -153,8 +153,8 @@ std::string common_chat_msg_parser::consume_rest() {
 }
 
 // Tries to find the regex, consumes it (pos right after it) and gives the prelude (right before it) and the groups to the callback.
-std::optional<common_chat_msg_parser::find_regex_result> common_chat_msg_parser::try_find_regex(const common_regex & regex) {
-    auto m = regex.search(input_, pos_);
+std::optional<common_chat_msg_parser::find_regex_result> common_chat_msg_parser::try_find_regex(const common_regex & regex, size_t from) {
+    auto m = regex.search(input_, from == std::string::npos ? pos_ : from);
     if (m.type == COMMON_REGEX_MATCH_TYPE_NONE) {
         return std::nullopt;
     }
