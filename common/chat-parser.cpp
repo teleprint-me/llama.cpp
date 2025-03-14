@@ -88,7 +88,7 @@ void common_chat_msg_parser::finish() {
     }
 }
 
-[[noreturn]] 
+[[noreturn]]
 void common_chat_msg_parser::incomplete(const std::string & message) {
     if (is_partial_) {
         finish();

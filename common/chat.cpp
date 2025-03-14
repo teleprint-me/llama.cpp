@@ -592,7 +592,7 @@ static void parse_json_tool_calls(
                         builder.consume_regex(close_regex);
                     }
                     continue;
-                } 
+                }
                 if (maybe_raw_python) {
                     auto code = builder.consume_rest();
                     std::string arguments;
