@@ -177,15 +177,16 @@ common_chat_msg_parser::consume_regex_result common_chat_msg_parser::consume_reg
 }
 
 std::optional<common_chat_msg_parser::consume_regex_result> common_chat_msg_parser::try_consume_regex(const common_regex & regex) {
-    if (!regex.at_start()) {
-        throw std::runtime_error("try_consume_regex requires a common_regex w/ at_start=true");
-    }
     auto m = regex.search(input_, pos_);
     if (m.type == COMMON_REGEX_MATCH_TYPE_NONE) {
         return std::nullopt;
     }
     if (m.type == COMMON_REGEX_MATCH_TYPE_PARTIAL) {
         incomplete(regex.str());
+        return std::nullopt;
+    }
+    if (m.groups[0].begin != pos_) {
+        // Didn't match at the current position.
         return std::nullopt;
     }
     pos_ = m.groups[0].end;

@@ -16,7 +16,6 @@ template <class T> static void assert_equals(const T & expected, const T & actua
 
 struct test_case {
     std::string pattern;
-    bool at_start = false;
     struct input_output {
         std::string input;
         common_regex_match output;
@@ -28,7 +27,6 @@ static void test_regex() {
     std::vector<test_case> test_cases {
         test_case {
             "a",
-            /* .at_start = */ false,
             {
                 {"a", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 1}}}},
                 {"b", {COMMON_REGEX_MATCH_TYPE_NONE, {}}},
@@ -38,7 +36,6 @@ static void test_regex() {
         },
         test_case {
             "abcd",
-            /* .at_start = */ false,
             {
                 {"abcd", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 4}}}},
                 {"abcde", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 4}}}},
@@ -56,7 +53,6 @@ static void test_regex() {
         },
         test_case {
             ".*?ab",
-            /* .at_start = */ false,
             {
                 {"ab", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 2}}}},
                 {"abc", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 2}}}},
@@ -68,7 +64,6 @@ static void test_regex() {
         },
         test_case {
             "a.*?b",
-            /* .at_start = */ false,
             {
                 {"ab", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 2}}}},
                 {"abc", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 2}}}},
@@ -81,7 +76,6 @@ static void test_regex() {
         },
         test_case {
             "ab(?:cd){2,4}ef",
-            /* .at_start = */ false,
             {
                 // {"ab", {COMMON_REGEX_MATCH_TYPE_PARTIAL, 0, {}}},
                 {"ab", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 2}}}},
@@ -99,7 +93,6 @@ static void test_regex() {
         },
         test_case {
             "a(?:rte| pure )fact",
-            /* .at_start = */ false,
             {
                 {"a", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 1}}}},
                 {"art", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 3}}}},
@@ -118,7 +111,6 @@ static void test_regex() {
         },
         test_case {
             "abc",
-            /* .at_start = */ true,
             {
                 {" abcc", {}},
                 {"ab", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 2}}}},
@@ -129,8 +121,8 @@ static void test_regex() {
     };
 
     for (const auto & test_case : test_cases) {
-        common_regex cr(test_case.pattern, test_case.at_start);
-        std::cout << "Testing pattern: /" << test_case.pattern << "/ (at_start = " << (test_case.at_start ? "true" : "false") << ")\n";
+        common_regex cr(test_case.pattern);
+        std::cout << "Testing pattern: /" << test_case.pattern << "/\n";
         // std::cout << "    partial rev: " << cr.reversed_partial_pattern.str() << '\n';
         for (const auto & input_output : test_case.inputs_outputs) {
             std::cout << "  Input: " << input_output.input << '\n';

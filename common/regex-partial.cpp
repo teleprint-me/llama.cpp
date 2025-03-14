@@ -2,11 +2,10 @@
 #include "common.h"
 #include <functional>
 
-common_regex::common_regex(const std::string & pattern, bool at_start) :
+common_regex::common_regex(const std::string & pattern) :
     pattern(pattern),
     rx(pattern),
-    rx_reversed_partial(regex_to_reversed_partial_regex(pattern)),
-    at_start_(at_start) {}
+    rx_reversed_partial(regex_to_reversed_partial_regex(pattern)) {}
 
 common_regex_match common_regex::search(const std::string & input, size_t pos, bool as_match) const {
     std::smatch match;
@@ -18,15 +17,13 @@ common_regex_match common_regex::search(const std::string & input, size_t pos, b
         ? std::regex_match(start, input.end(), match, rx)
         : std::regex_search(start, input.end(), match, rx);
     if (found) {
-        if (as_match || !at_start_ || match.position() == 0) {
-            common_regex_match res;
-            res.type = COMMON_REGEX_MATCH_TYPE_FULL;
-            for (size_t i = 0; i < match.size(); ++i) {
-                auto begin = pos + match.position(i);
-                res.groups.emplace_back(begin, begin + match.length(i));
-            }
-            return res;
+        common_regex_match res;
+        res.type = COMMON_REGEX_MATCH_TYPE_FULL;
+        for (size_t i = 0; i < match.size(); ++i) {
+            auto begin = pos + match.position(i);
+            res.groups.emplace_back(begin, begin + match.length(i));
         }
+        return res;
     }
     std::match_results<std::string::const_reverse_iterator> srmatch;
     if (std::regex_match(input.rbegin(), input.rend() - pos, srmatch, rx_reversed_partial)) {
@@ -34,7 +31,7 @@ common_regex_match common_regex::search(const std::string & input, size_t pos, b
         if (group.length() != 0) {
             auto it = srmatch[1].second.base();
             // auto position = static_cast<size_t>(std::distance(input.begin(), it));
-            if ((!as_match && !at_start_) || it == input.begin()) {
+            if ((!as_match) || it == input.begin()) {
                 common_regex_match res;
                 res.type = COMMON_REGEX_MATCH_TYPE_PARTIAL;
                 auto begin = std::distance(input.begin(), it);

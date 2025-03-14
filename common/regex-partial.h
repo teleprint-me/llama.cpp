@@ -42,15 +42,13 @@ class common_regex {
     std::string pattern;
     std::regex rx;
     std::regex rx_reversed_partial;
-    bool at_start_;
 
   public:
-    common_regex(const std::string & pattern, bool at_start = false);
+    common_regex(const std::string & pattern);
 
     common_regex_match search(const std::string & input, size_t pos, bool as_match = false) const;
 
     const std::string & str() const { return pattern; }
-    bool at_start() const { return at_start_; }
 };
 
 // For testing only (pretty print of failures).
