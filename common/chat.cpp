@@ -609,7 +609,6 @@ static void parse_json_tool_calls(
                     return;
                 }
                 builder.incomplete("incomplete tool call");
-                return;
             }
             break;
         }
@@ -1510,7 +1509,6 @@ static void common_chat_parse_hermes_2_pro(common_chat_msg_parser & builder) {
             if (auto partial = builder.try_consume_json({{"arguments"}})) {
                 if (!builder.add_tool_call(partial->json, partial->healing_marker)) {
                     builder.incomplete("incomplete tool call");
-                    return;
                 }
                 builder.consume_spaces();
                 builder.consume_literal(close_tag);
@@ -1537,7 +1535,6 @@ static void common_chat_parse_hermes_2_pro(common_chat_msg_parser & builder) {
                 std::string arguments = partial->json.dump();
                 if (!builder.add_tool_call(function_name, "", arguments, partial->healing_marker)) {
                     builder.incomplete("incomplete tool call");
-                    return;
                 }
                 builder.consume_spaces();
                 builder.consume_literal(close_tag);

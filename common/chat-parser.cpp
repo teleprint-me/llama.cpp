@@ -161,7 +161,6 @@ std::optional<common_chat_msg_parser::find_regex_result> common_chat_msg_parser:
     }
     if (m.type == COMMON_REGEX_MATCH_TYPE_PARTIAL) {
         incomplete(regex.str());
-        return std::nullopt;
     }
     auto prelude = input_.substr(pos_, m.groups[0].begin - pos_);
     pos_ = m.groups[0].end;
@@ -174,7 +173,6 @@ common_chat_msg_parser::consume_regex_result common_chat_msg_parser::consume_reg
         return *result;
     }
     incomplete("Failed to consume regex: " + regex.str());
-    return {};
 }
 
 std::optional<common_chat_msg_parser::consume_regex_result> common_chat_msg_parser::try_consume_regex(const common_regex & regex) {
@@ -184,7 +182,6 @@ std::optional<common_chat_msg_parser::consume_regex_result> common_chat_msg_pars
     }
     if (m.type == COMMON_REGEX_MATCH_TYPE_PARTIAL) {
         incomplete(regex.str());
-        return std::nullopt;
     }
     if (m.groups[0].begin != pos_) {
         // Didn't match at the current position.
@@ -203,7 +200,6 @@ common_json common_chat_msg_parser::consume_json(
         return *result;
     }
     incomplete("Failed to consume JSON");
-    return {};
 }
 
 std::optional<common_json> common_chat_msg_parser::try_consume_json(
@@ -222,7 +218,6 @@ std::optional<common_json> common_chat_msg_parser::try_consume_json(
     }
     if (!is_partial()) {
         incomplete("JSON is incomplete");
-        return std::nullopt; // Actually unreachable
     }
 
     LOG_DBG("Parsed partial JSON: %s (json_healing_marker: %s)\n", result.json.dump().c_str(), result.healing_marker.json_dump_marker.c_str());
