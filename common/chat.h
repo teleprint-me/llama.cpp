@@ -123,10 +123,12 @@ struct common_chat_params {
     std::vector<std::string>            additional_stops;
 };
 
-struct common_chat_reasoning_syntax {
-    common_reasoning_format format = COMMON_REASONING_FORMAT_NONE;
-    bool inlined_in_content        = false;
-    bool thinking_forced_open      = false;
+struct common_chat_syntax {
+    common_chat_format       format                = COMMON_CHAT_FORMAT_CONTENT_ONLY;
+    common_reasoning_format  reasoning_format      = COMMON_REASONING_FORMAT_NONE;
+    // Whether reasoning_content should be inlined in the content (e.g. for reasoning_format=deepseek in stream mode)
+    bool                     reasoning_in_content  = false;
+    bool                     thinking_forced_open  = false;
 };
 
 // Check if the template supplied via "--chat-template" is supported or not. Returns true if it's valid
@@ -166,7 +168,7 @@ std::string common_chat_format_example(
     bool use_jinja);
 
 std::string               common_chat_format_name(common_chat_format format);
-common_chat_msg           common_chat_parse(const std::string & input, common_chat_format format, bool is_partial = false, const common_chat_reasoning_syntax & reasoning_syntax = {});
+common_chat_msg           common_chat_parse(const std::string & input, bool is_partial, const common_chat_syntax & syntax);
 
 common_chat_tool_choice common_chat_tool_choice_parse_oaicompat(const std::string & tool_choice);
 

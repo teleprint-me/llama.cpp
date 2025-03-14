@@ -1,3 +1,4 @@
+#include "chat.h"
 #include "utils.hpp"
 
 #include "arg.h"
@@ -117,8 +118,7 @@ struct slot_params {
     oaicompat_type               oaicompat                 = OAICOMPAT_TYPE_NONE;
     std::string                  oaicompat_model;
     std::string                  oaicompat_cmpl_id;
-    common_chat_format           oaicompat_chat_format      = COMMON_CHAT_FORMAT_CONTENT_ONLY;
-    common_chat_reasoning_syntax oaicompat_reasoning_syntax;
+    common_chat_syntax           oaicompat_chat_syntax;
 
     json to_json() const {
         std::vector<std::string> samplers;
@@ -174,7 +174,10 @@ struct slot_params {
             {"grammar_lazy",              sampling.grammar_lazy},
             {"grammar_triggers",          grammar_triggers},
             {"preserved_tokens",          sampling.preserved_tokens},
-            {"chat_format",               common_chat_format_name(oaicompat_chat_format)},
+            {"chat_format",               common_chat_format_name(oaicompat_chat_syntax.format)},
+            {"reasoning_format",          (oaicompat_chat_syntax.reasoning_format == COMMON_REASONING_FORMAT_DEEPSEEK ? "deepseek" : "none")},
+            {"reasoning_in_content",      oaicompat_chat_syntax.reasoning_in_content},
+            {"thinking_forced_open",      oaicompat_chat_syntax.thinking_forced_open},
             {"samplers",                  samplers},
             {"speculative.n_max",         speculative.n_max},
             {"speculative.n_min",         speculative.n_min},
@@ -349,14 +352,14 @@ struct server_task {
         {
             auto it = data.find("chat_format");
             if (it != data.end()) {
-                params.oaicompat_chat_format = static_cast<common_chat_format>(it->get<int>());
-                SRV_INF("Chat format: %s\n", common_chat_format_name(params.oaicompat_chat_format).c_str());
+                params.oaicompat_chat_syntax.format = static_cast<common_chat_format>(it->get<int>());
+                SRV_INF("Chat format: %s\n", common_chat_format_name(params.oaicompat_chat_syntax.format).c_str());
             } else {
-                params.oaicompat_chat_format = defaults.oaicompat_chat_format;
+                params.oaicompat_chat_syntax.format = defaults.oaicompat_chat_syntax.format;
             }
-            params.oaicompat_reasoning_syntax.format = params_base.reasoning_format;
-            params.oaicompat_reasoning_syntax.inlined_in_content = params.stream;
-            params.oaicompat_reasoning_syntax.thinking_forced_open = json_value(data, "thinking_forced_open", false);
+            params.oaicompat_chat_syntax.reasoning_format = params_base.reasoning_format;
+            params.oaicompat_chat_syntax.reasoning_in_content = params.stream;
+            params.oaicompat_chat_syntax.thinking_forced_open = json_value(data, "thinking_forced_open", false);
         }
 
         {
@@ -632,7 +635,7 @@ struct server_task_result_cmpl_final : server_task_result {
     oaicompat_type     oaicompat                = OAICOMPAT_TYPE_NONE;
     std::string        oaicompat_model;
     std::string        oaicompat_cmpl_id;
-    common_chat_format oaicompat_chat_format    = COMMON_CHAT_FORMAT_CONTENT_ONLY;
+    common_chat_syntax oaicompat_chat_syntax;
     common_chat_msg    oaicompat_msg;
 
     virtual int get_index() override {
@@ -2335,9 +2338,8 @@ struct server_context {
         SRV_DBG("Parsing chat message: %s\n", slot.generated_text.c_str());
         auto new_msg = common_chat_parse(
             slot.generated_text,
-            slot.params.oaicompat_chat_format,
             /* is_partial= */ true,
-            slot.params.oaicompat_reasoning_syntax);
+            slot.params.oaicompat_chat_syntax);
         if (!new_msg.empty()) {
             slot.generated_msg = new_msg;
         }
@@ -2346,7 +2348,6 @@ struct server_context {
 
         // res->previous_content = slot.generated_text.substr(0, slot.generated_text.size() - tkn.text_to_send.size());
         // res->oaicompat_chat_format = slot.params.oaicompat_chat_format;
-
 
         // populate res.probs_output
         if (slot.params.sampling.n_probs > 0) {
@@ -2391,10 +2392,9 @@ struct server_context {
         SRV_DBG("Parsing chat message: %s\n", res->content.c_str());
         res->oaicompat_msg         = slot.generated_msg = common_chat_parse(
             res->content,
-            slot.params.oaicompat_chat_format,
             /* is_partial= */ slot.stop == STOP_TYPE_LIMIT,
-            slot.params.oaicompat_reasoning_syntax);
-        res->oaicompat_chat_format = slot.params.oaicompat_chat_format;
+            slot.params.oaicompat_chat_syntax);
+        res->oaicompat_chat_syntax = slot.params.oaicompat_chat_syntax;
 
         // populate res.probs_output
         if (slot.params.sampling.n_probs > 0) {

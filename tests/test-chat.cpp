@@ -115,6 +115,15 @@ static bool match_string(const std::string & input, llama_grammar * grammar) {
     return false;
 }
 
+static std::string renormalize_json(const std::string & json_str) {
+    try {
+        auto json_obj = json::parse(json_str);
+        return json_obj.dump();
+    } catch (const std::exception & e) {
+        std::cerr << "Failed to parse JSON: " << e.what() << '\n';
+        return json_str;
+    }
+}
 static void assert_msg_equals(const common_chat_msg & expected, const common_chat_msg & actual) {
     assert_equals(expected.role, actual.role);
     assert_equals(expected.content, actual.content);
@@ -131,7 +140,7 @@ static void assert_msg_equals(const common_chat_msg & expected, const common_cha
         const auto & expected_tool_call = expected.tool_calls[i];
         const auto & actual_tool_call   = actual.tool_calls[i];
         assert_equals(expected_tool_call.name, actual_tool_call.name);
-        assert_equals(json::parse(expected_tool_call.arguments).dump(), json::parse(actual_tool_call.arguments).dump());
+        assert_equals(renormalize_json(expected_tool_call.arguments), renormalize_json(actual_tool_call.arguments));
         assert_equals(expected_tool_call.id, actual_tool_call.id);
     }
 }
@@ -259,9 +268,10 @@ static void test_templates(const struct common_chat_templates * tmpls, const std
         }
 
         if (expect_grammar_triggered) {
-            common_chat_reasoning_syntax reasoning_syntax;
-            reasoning_syntax.format = reasoning_format;
-            const auto msg = common_chat_parse(data.delta, data.params.format, /* is_partial= */ false, reasoning_syntax);
+            common_chat_syntax syntax;
+            syntax.format = data.params.format;
+            syntax.reasoning_format = reasoning_format;
+            const auto msg = common_chat_parse(data.delta, /* is_partial= */ false, syntax);
             assert_msg_equals(test_message, msg);
         }
 
@@ -405,6 +415,9 @@ const std::vector<common_chat_tool_call> tool_calls_id {
 const std::vector<common_chat_tool_call> tool_calls_python {
     { "python", "{\"code\": \"print('hey')\"}", /* .id = */ "" },
 };
+const std::vector<common_chat_tool_call> tool_calls_python_unclosed {
+    { "python", "{\"code\":\"print('hey')", /* .id = */ "" },
+};
 
 const common_chat_msg message_assist_empty {
     "assistant",
@@ -492,6 +505,15 @@ const common_chat_msg message_assist_call_python {
     "",
     /* .content_parts = */ {},
     tool_calls_python,
+    /* .reasoning_content = */ "",
+    /* .tool_name = */ "",
+    /* .tool_call_id = */ "",
+};
+const common_chat_msg message_assist_call_python_unclosed {
+    "assistant",
+    "",
+    /* .content_parts = */ {},
+    tool_calls_python_unclosed,
     /* .reasoning_content = */ "",
     /* .tool_name = */ "",
     /* .tool_call_id = */ "",
@@ -653,48 +675,50 @@ static void test_template_output_parsers() {
         assert_msg_equals(message_assist,
             common_chat_parse(
                 "Hello, world!\nWhat's up?",
-                COMMON_CHAT_FORMAT_COMMAND_R7B));
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_COMMAND_R7B}));
         assert_msg_equals(message_assist,
             common_chat_parse(
                 "<|START_RESPONSE|>Hello, world!\nWhat's up?<|END_RESPONSE|>",
-                COMMON_CHAT_FORMAT_COMMAND_R7B));
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_COMMAND_R7B}));
         assert_msg_equals(message_assist_thoughts,
             common_chat_parse(
                 "<|START_THINKING|>I'm thinking<|END_THINKING|>"
                 "<|START_RESPONSE|>Hello, world!\nWhat's up?<|END_RESPONSE|>",
-                COMMON_CHAT_FORMAT_COMMAND_R7B,
                 /* is_partial= */ false,
                 {
-                    /* .format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
-                    /* .inlined_in_content = */ false,
+                    /* .format = */ COMMON_CHAT_FORMAT_COMMAND_R7B,
+                    /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
+                    /* .reasoning_in_content = */ false,
                     /* .thinking_forced_open = */ false,
                 }));
         assert_msg_equals(message_assist_thoughts_unparsed_deepseek,
             common_chat_parse(
                 "<|START_THINKING|>I'm thinking<|END_THINKING|>"
                 "<|START_RESPONSE|>Hello, world!\nWhat's up?<|END_RESPONSE|>",
-                COMMON_CHAT_FORMAT_COMMAND_R7B,
                 /* is_partial= */ false,
                 {
-                    /* .format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
-                    /* .inlined_in_content = */ true,
+                    /* .format = */ COMMON_CHAT_FORMAT_COMMAND_R7B,
+                    /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
+                    /* .reasoning_in_content = */ true,
                     /* .thinking_forced_open = */ false,
                 }));
         assert_msg_equals(message_assist_thoughts_unparsed_r7b,
             common_chat_parse(
                 "<|START_THINKING|>I'm thinking<|END_THINKING|>"
                 "<|START_RESPONSE|>Hello, world!\nWhat's up?<|END_RESPONSE|>",
-                COMMON_CHAT_FORMAT_COMMAND_R7B,
-                /* is_partial= */ false));
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_COMMAND_R7B}));
         assert_msg_equals(message_assist_thoughts,
             common_chat_parse(
                 "<|START_THINKING|>I'm thinking<|END_THINKING|>"
                 "<|START_RESPONSE|>Hello, world!\nWhat's up?<|END_RESPONSE|>",
-                COMMON_CHAT_FORMAT_COMMAND_R7B,
                 /* is_partial= */ false,
                 {
-                    /* .format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
-                    /* .inlined_in_content = */ false,
+                    /* .format = */ COMMON_CHAT_FORMAT_COMMAND_R7B,
+                    /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
+                    /* .reasoning_in_content = */ false,
                     /* .thinking_forced_open = */ false,
                 }));
         assert_msg_equals(message_assist_thoughts_call_idx,
@@ -703,11 +727,11 @@ static void test_template_output_parsers() {
                 "<|START_ACTION|>[\n"
                 "    {\"tool_call_id\": \"0\", \"tool_name\": \"special_function\", \"parameters\": {\"arg1\": 1}}\n"
                 "]<|END_ACTION|>",
-                COMMON_CHAT_FORMAT_COMMAND_R7B,
                 /* is_partial= */ false,
                 {
-                    /* .format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
-                    /* .inlined_in_content = */ false,
+                    /* .format = */ COMMON_CHAT_FORMAT_COMMAND_R7B,
+                    /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
+                    /* .reasoning_in_content = */ false,
                     /* .thinking_forced_open = */ false,
                 }));
 
@@ -742,27 +766,28 @@ static void test_template_output_parsers() {
             message_assist_empty,
             common_chat_parse(
                 "{ \"tool_call\" : { \"name\" : \"t",
-                COMMON_CHAT_FORMAT_GENERIC,
-                /* is_partial= */ true));
+                /* is_partial= */ true,
+                {COMMON_CHAT_FORMAT_GENERIC}));
         assert_equals(
             message_assist_call_empty_args,
             common_chat_parse(
                 "{ \"tool_call\" : { \"name\" : \"special_function\"",
-                COMMON_CHAT_FORMAT_GENERIC,
-                /* is_partial= */ true));
+                /* is_partial= */ true,
+                {COMMON_CHAT_FORMAT_GENERIC}));
         assert_equals(
             message_assist_call_cutoff_args,
             common_chat_parse(
                 "{ \"tool_call\" : { \"name\" : \"special_function\", \"arguments\" : { \"arg",
-                COMMON_CHAT_FORMAT_GENERIC,
-                /* is_partial= */ true));
+                /* is_partial= */ true,
+                {COMMON_CHAT_FORMAT_GENERIC}));
 
         assert_msg_equals(message_assist,
-                          common_chat_parse("{\n"
-                                            "  \"response\": \"Hello, world!\\nWhat's up?\"\n"
-                                            "}",
-                                                                        COMMON_CHAT_FORMAT_GENERIC,
-                                                                        /* is_partial= */ false));
+            common_chat_parse(
+                "{\n"
+                "  \"response\": \"Hello, world!\\nWhat's up?\"\n"
+                "}",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_GENERIC}));
         test_templates(tmpls.get(), end_tokens, message_assist_call_id, tools,
                       "{\n"
                       "  \"tool_calls\": [\n"
@@ -806,96 +831,148 @@ static void test_template_output_parsers() {
                 .format);
 
         // Test parsing
-        assert_msg_equals(message_assist_call, common_chat_parse(
-            "<tool_call>\n"
-            "{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
-            "</tool_call>",
-            COMMON_CHAT_FORMAT_HERMES_2_PRO));
-        assert_msg_equals(message_assist_call, common_chat_parse(
-            "<function=special_function>{\"arg1\": 1}</function>",
-            COMMON_CHAT_FORMAT_HERMES_2_PRO));
-        assert_msg_equals(message_assist_call, common_chat_parse(
-            "<function name=\"special_function\">\n"
-            "{\"arg1\": 1}\n"
-            "</function>",
-            COMMON_CHAT_FORMAT_HERMES_2_PRO));
-        assert_msg_equals(message_assist_call, common_chat_parse(
-            "<tool>\n"
-            "  {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
-            "</tool>",
-            COMMON_CHAT_FORMAT_HERMES_2_PRO));
-        assert_msg_equals(message_assist_call, common_chat_parse(
-            "<tools>\n"
-            "  {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
-            "</tools>",
-            COMMON_CHAT_FORMAT_HERMES_2_PRO));
-        assert_msg_equals(message_assist_call, common_chat_parse(
-            "<response>\n"
-            "  {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
-            "</response>",
-            COMMON_CHAT_FORMAT_HERMES_2_PRO));
-        assert_msg_equals(message_assist_call, common_chat_parse(
-            "```xml\n"
-            "<response>\n"
-            "    {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
-            "</response>\n"
-            "```",
-            COMMON_CHAT_FORMAT_HERMES_2_PRO));
-        assert_msg_equals(message_assist_call, common_chat_parse(
-            "```xml\n"
-            "  {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
-            "```",
-            COMMON_CHAT_FORMAT_HERMES_2_PRO));
-        assert_msg_equals(message_assist_call, common_chat_parse(
-            "```\n"
-            "  {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
-            "```",
-            COMMON_CHAT_FORMAT_HERMES_2_PRO));
-        assert_msg_equals(message_assist_call, common_chat_parse(
-            "```\n"
-            "{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
-            "```",
-            COMMON_CHAT_FORMAT_HERMES_2_PRO));
-        assert_msg_equals(message_assist_call, common_chat_parse(
-            "```json\n"
-            "  {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
-            "```",
-            COMMON_CHAT_FORMAT_HERMES_2_PRO));
-        assert_msg_equals(message_assist_call, common_chat_parse(
-            "```json\n"
-            "\n"
-            "                    <function_call> {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}} \n"
-            "                    </function_call> \n"
-            "``` ",
-            COMMON_CHAT_FORMAT_HERMES_2_PRO));
-        assert_msg_equals(message_assist_call, common_chat_parse(
-            "<json>\n"
-            "  {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
-            "</json>",
-            COMMON_CHAT_FORMAT_HERMES_2_PRO));
-        assert_msg_equals(message_assist_call, common_chat_parse(
-            "<xml>\n"
-            "  {\n"
-            "    \"name\": \"special_function\", \"arguments\": {\"arg1\": 1}\n"
-            "  }\n"
-            "</xml>",
-            COMMON_CHAT_FORMAT_HERMES_2_PRO));
-        assert_msg_equals(message_assist_call, common_chat_parse(
-            "<JSON>\n"
-            "  {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
-            "</JSON>",
-            COMMON_CHAT_FORMAT_HERMES_2_PRO));
-        assert_msg_equals(message_assist_call, common_chat_parse(
-            "{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}",
-            COMMON_CHAT_FORMAT_HERMES_2_PRO));
-        assert_msg_equals(message_assist_call, common_chat_parse(
-            "{\n  \"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}",
-            COMMON_CHAT_FORMAT_HERMES_2_PRO));
+        assert_msg_equals(
+            message_assist_call,
+            common_chat_parse(
+                "<tool_call>\n"
+                "{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
+                "</tool_call>",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
+        assert_msg_equals(
+            message_assist_call,
+            common_chat_parse(
+                "<function=special_function>{\"arg1\": 1}</function>",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
+        assert_msg_equals(
+            message_assist_call,
+            common_chat_parse(
+                "<function name=\"special_function\">\n"
+                "{\"arg1\": 1}\n"
+                "</function>",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
+        assert_msg_equals(
+            message_assist_call,
+            common_chat_parse(
+                "<tool>\n"
+                "  {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
+                "</tool>",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
+        assert_msg_equals(
+            message_assist_call,
+            common_chat_parse(
+                "<tools>\n"
+                "  {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
+                "</tools>",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
+        assert_msg_equals(
+            message_assist_call,
+            common_chat_parse(
+                "<response>\n"
+                "  {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
+                "</response>",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
+        assert_msg_equals(
+            message_assist_call,
+            common_chat_parse(
+                "```xml\n"
+                "<response>\n"
+                "    {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
+                "</response>\n"
+                "```",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
+        assert_msg_equals(
+            message_assist_call,
+            common_chat_parse(
+                "```xml\n"
+                "  {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
+                "```",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
+        assert_msg_equals(
+            message_assist_call,
+            common_chat_parse(
+                "```\n"
+                "  {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
+                "```",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
+        assert_msg_equals(
+            message_assist_call,
+            common_chat_parse(
+                "```\n"
+                "{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
+                "```",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
+        assert_msg_equals(
+            message_assist_call,
+            common_chat_parse(
+                "```json\n"
+                "  {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
+                "```",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
+        assert_msg_equals(
+            message_assist_call,
+            common_chat_parse(
+                "```json\n"
+                "\n"
+                "                    <function_call> {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}} \n"
+                "                    </function_call> \n"
+                "``` ",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
+        assert_msg_equals(
+            message_assist_call,
+            common_chat_parse(
+                "<json>\n"
+                "  {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
+                "</json>",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
+        assert_msg_equals(
+            message_assist_call,
+            common_chat_parse(
+                "<xml>\n"
+                "  {\n"
+                "    \"name\": \"special_function\", \"arguments\": {\"arg1\": 1}\n"
+                "  }\n"
+                "</xml>",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
+        assert_msg_equals(
+            message_assist_call,
+            common_chat_parse(
+                "<JSON>\n"
+                "  {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
+                "</JSON>",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
+        assert_msg_equals(
+            message_assist_call,
+            common_chat_parse(
+                "{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
+        assert_msg_equals(
+            message_assist_call,
+            common_chat_parse(
+                "{\n  \"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
 
         assert_msg_equals(message_assist_thoughts_unparsed_deepseek,
             common_chat_parse(
                 "<think>I'm thinking</think>Hello, world!\nWhat's up?",
-                COMMON_CHAT_FORMAT_HERMES_2_PRO));
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
         // assert_msg_equals(message_assist_thoughts_unparsed_deepseek,
         //     common_chat_parse(
         //         "I'm thinking</think>Hello, world!\nWhat's up?",
@@ -903,21 +980,21 @@ static void test_template_output_parsers() {
         assert_msg_equals(message_assist_thoughts,
             common_chat_parse(
                 "<think>I'm thinking</think>Hello, world!\nWhat's up?",
-                COMMON_CHAT_FORMAT_HERMES_2_PRO,
                 /* is_partial= */ false,
                 {
-                    /* .format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
-                    /* .inlined_in_content = */ false,
+                    /* .format = */ COMMON_CHAT_FORMAT_HERMES_2_PRO,
+                    /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
+                    /* .reasoning_in_content = */ false,
                     /* .thinking_forced_open = */ false,
                 }));
         assert_msg_equals(message_assist_thoughts,
             common_chat_parse(
                 "I'm thinking</think>Hello, world!\nWhat's up?",
-                COMMON_CHAT_FORMAT_HERMES_2_PRO,
                 /* is_partial= */ false,
                 {
-                    /* .format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
-                    /* .inlined_in_content = */ false,
+                    /* .format = */ COMMON_CHAT_FORMAT_HERMES_2_PRO,
+                    /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
+                    /* .reasoning_in_content = */ false,
                     /* .thinking_forced_open = */ false,
                 }));
 
@@ -997,22 +1074,32 @@ static void test_template_output_parsers() {
                 "What's up?\n"
                 ">>>special_function\n"
                 "{\"arg1\": 1}\n",
-                COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2));
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2}));
         assert_msg_equals(message_assist_call_python,
             common_chat_parse(
                 "python\n"
                 "print('hey')",
-                COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2));
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2}));
+        assert_msg_equals(message_assist_call_python_unclosed,
+            common_chat_parse(
+                "python\n"
+                "print('hey')",
+                /* is_partial= */ true,
+                {COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2}));
         assert_msg_equals(message_assist_call,
             common_chat_parse(
                 "special_function\n"
                 "{\"arg1\": 1} \n                    ",
-                COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2));
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2}));
         assert_msg_equals(message_assist,
             common_chat_parse(
                 "all\n"
                 "Hello, world!\nWhat's up?",
-                COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2));
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2}));
 
         test_templates(tmpls.get(), end_tokens, message_assist, {},
                       "all\n"
@@ -1045,36 +1132,37 @@ static void test_template_output_parsers() {
         assert_msg_equals(message_assist_thoughts_unparsed_deepseek,
             common_chat_parse(
                 "<think>I'm thinking</think>Hello, world!\nWhat's up?",
-                COMMON_CHAT_FORMAT_DEEPSEEK_R1));
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_DEEPSEEK_R1}));
         assert_msg_equals(message_assist_thoughts,
             common_chat_parse(
                 "<think>I'm thinking</think>Hello, world!\nWhat's up?",
-                COMMON_CHAT_FORMAT_DEEPSEEK_R1,
                 /* is_partial= */ false,
                 {
-                    /* .format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
-                    /* .inlined_in_content = */ false,
+                    /* .format = */ COMMON_CHAT_FORMAT_DEEPSEEK_R1,
+                    /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
+                    /* .reasoning_in_content = */ false,
                     /* .thinking_forced_open = */ false,
                 }));
         assert_msg_equals(message_assist_thoughts,
             common_chat_parse(
                 "I'm thinking</think>Hello, world!\nWhat's up?",
-                COMMON_CHAT_FORMAT_DEEPSEEK_R1,
                 /* is_partial= */ false,
                 {
-                    /* .format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
-                    /* .inlined_in_content = */ false,
+                    /* .format = */ COMMON_CHAT_FORMAT_DEEPSEEK_R1,
+                    /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
+                    /* .reasoning_in_content = */ false,
                     /* .thinking_forced_open = */ false,
                 }));
         assert_msg_equals(message_assist_thoughts,
             // Latest template update (ast of 20250209) adds a trailing <think>\n if add_generation_prompt is true.
             common_chat_parse(
                 "I'm thinking</think>Hello, world!\nWhat's up?",
-                COMMON_CHAT_FORMAT_DEEPSEEK_R1,
                 /* is_partial= */ false,
                 {
-                    /* .format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
-                    /* .inlined_in_content = */ false,
+                    /* .format = */ COMMON_CHAT_FORMAT_DEEPSEEK_R1,
+                    /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
+                    /* .reasoning_in_content = */ false,
                     /* .thinking_forced_open = */ false,
                 }));
         // test_templates(tmpls.get(), end_tokens, message_assist_call, tools,
@@ -1098,25 +1186,26 @@ static void test_template_output_parsers() {
         assert_msg_equals(message_assist_thoughts_unparsed_deepseek,
             common_chat_parse(
                 "<think>I'm thinking</think>Hello, world!\nWhat's up?",
-                COMMON_CHAT_FORMAT_DEEPSEEK_R1));
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_DEEPSEEK_R1}));
         assert_msg_equals(message_assist_thoughts,
             common_chat_parse(
                 "<think>I'm thinking</think>Hello, world!\nWhat's up?",
-                COMMON_CHAT_FORMAT_DEEPSEEK_R1,
                 /* is_partial= */ false,
                 {
-                    /* .format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
-                    /* .inlined_in_content = */ false,
+                    /* .format = */ COMMON_CHAT_FORMAT_DEEPSEEK_R1,
+                    /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
+                    /* .reasoning_in_content = */ false,
                     /* .thinking_forced_open = */ false,
                 }));
         assert_msg_equals(message_assist_thoughts,
             common_chat_parse(
                 "I'm thinking</think>Hello, world!\nWhat's up?",
-                COMMON_CHAT_FORMAT_DEEPSEEK_R1,
                 /* is_partial= */ false,
                 {
-                    /* .format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
-                    /* .inlined_in_content = */ false,
+                    /* .format = */ COMMON_CHAT_FORMAT_DEEPSEEK_R1,
+                    /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
+                    /* .reasoning_in_content = */ false,
                     /* .thinking_forced_open = */ false,
                 }));
 
@@ -1127,7 +1216,8 @@ static void test_template_output_parsers() {
                 "```json\n"
                 "{\"arg1\": 1}\n"
                 "```<｜tool▁call▁end｜><｜tool▁calls▁end｜>",
-                COMMON_CHAT_FORMAT_DEEPSEEK_R1));
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_DEEPSEEK_R1}));
         assert_msg_equals(message_assist_call_thoughts,
             common_chat_parse(
                 "<think>I'm\nthinking</think>\n\n"
@@ -1135,11 +1225,11 @@ static void test_template_output_parsers() {
                 "```json\n"
                 "{\"arg1\": 1}\n"
                 "```<｜tool▁call▁end｜><｜tool▁calls▁end｜>",
-                COMMON_CHAT_FORMAT_DEEPSEEK_R1,
                 /* is_partial= */ false,
                 {
-                    /* .format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
-                    /* .inlined_in_content = */ false,
+                    /* .format = */ COMMON_CHAT_FORMAT_DEEPSEEK_R1,
+                    /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
+                    /* .reasoning_in_content = */ false,
                     /* .thinking_forced_open = */ false,
                 }));
         test_templates(tmpls.get(), end_tokens, message_assist_call, tools,

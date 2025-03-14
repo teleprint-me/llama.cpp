@@ -578,17 +578,22 @@ static void parse_json_tool_calls(
                     // get_function_name signalled us that we should skip this match and treat it as content.
                     from = res->groups[0].begin + 1;
                     continue;
-                } else {
-                    from = std::string::npos;
                 }
+                from = std::string::npos;
+
                 builder.add_content(res->prelude);
-                if (auto partial = builder.try_consume_json({{}})) {
-                    std::string arguments = partial->json.dump();
-                    if (!builder.add_tool_call(name, "", arguments, partial->healing_marker)) {
-                        builder.incomplete("incomplete tool call");
+                auto maybe_raw_python = name == "python" && allow_raw_python;
+                if (builder.input()[builder.pos()] == '{' || !maybe_raw_python) {
+                    if (auto partial = builder.try_consume_json({{}})) {
+                        std::string arguments = partial->json.dump();
+                        if (!builder.add_tool_call(name, "", arguments, partial->healing_marker)) {
+                            builder.incomplete("incomplete tool call");
+                        }
+                        builder.consume_regex(close_regex);
                     }
-                    builder.consume_regex(close_regex);
-                } else if (name == "python" && allow_raw_python) {
+                    continue;
+                } 
+                if (maybe_raw_python) {
                     auto code = builder.consume_rest();
                     std::string arguments;
                     common_healing_marker healing_marker;
@@ -602,13 +607,11 @@ static void parse_json_tool_calls(
                         builder.incomplete("incomplete tool call");
                     }
                     return;
-                } else {
-                    builder.incomplete("incomplete tool call");
-                    return;
                 }
-            } else {
-                break;
+                builder.incomplete("incomplete tool call");
+                return;
             }
+            break;
         }
         if (block_close) {
             builder.consume_regex(*block_close);
@@ -1238,14 +1241,18 @@ static common_chat_params common_chat_params_init_functionary_v3_2(const common_
                 std::string args_pattern = "[\\s\\S]*";
                 auto args_rule = builder.add_schema(name + "-args", parameters);
                 if (name == "python") {
-                    args_pattern = "\\{" + args_pattern;
                     args_rule = builder.add_rule(name + "-maybe-raw-args", args_rule + " | [^{] .*");
+                } else {
+                    args_pattern = "\\{" + args_pattern;
                 }
-                first_tool_rules.push_back(builder.add_rule(name + "-call", "( \"assistant<|end_header_id|>\\n\" )? \"" + name + "\\n\" " + args_rule));
-                subsequent_tool_rules.push_back(builder.add_rule(name + "-call2", "\">>>" + name + "\\n\" " + args_rule));
+                auto call_rule = builder.add_rule(name + "-call", "\"" + name + "\\n\" " + args_rule);
+                first_tool_rules.push_back(call_rule);
+                if (inputs.parallel_tool_calls) {
+                    subsequent_tool_rules.push_back(builder.add_rule(name + "-call2", "\">>>\" " + call_rule));
+                }
                 data.grammar_triggers.push_back({
                     COMMON_GRAMMAR_TRIGGER_TYPE_PATTERN_FULL,
-                    "((?:[\\s\\S]*?>>>)?" + regex_escape(name) + "\n)" + args_pattern,
+                    "((?:[\\s\\S]+?>>>)?" + regex_escape(name) + "\n)" + args_pattern,
                 });
             });
             data.preserved_tokens = {
@@ -1771,10 +1778,10 @@ static void common_chat_parse(common_chat_msg_parser & builder, common_chat_form
     builder.finish();
 }
 
-common_chat_msg common_chat_parse(const std::string & input, common_chat_format format, bool is_partial, const common_chat_reasoning_syntax & reasoning_syntax) {
-    common_chat_msg_parser builder(input, is_partial, reasoning_syntax);
+common_chat_msg common_chat_parse(const std::string & input, bool is_partial, const common_chat_syntax & syntax) {
+    common_chat_msg_parser builder(input, is_partial, syntax);
     try {
-        common_chat_parse(builder, format);
+        common_chat_parse(builder, syntax.format);
     } catch (const common_chat_msg_partial_exception & ex) {
         LOG_DBG("Partial parse: %s\n", ex.what());
         if (!is_partial) {
@@ -1782,9 +1789,9 @@ common_chat_msg common_chat_parse(const std::string & input, common_chat_format 
         }
     }
     auto msg = builder.result();
-    switch (reasoning_syntax.format) {
+    switch (syntax.reasoning_format) {
         case COMMON_REASONING_FORMAT_DEEPSEEK:
-            if (!msg.reasoning_content.empty() && reasoning_syntax.inlined_in_content) {
+            if (!msg.reasoning_content.empty() && syntax.reasoning_in_content) {
                 std::string content = "<think>" + msg.reasoning_content;
                 if (!is_partial || !msg.content.empty()) {
                     content += "</think>";
