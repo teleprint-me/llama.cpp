@@ -242,16 +242,11 @@ def test_chat_completion_with_timings_per_token():
         "stream": True,
         "timings_per_token": True,
     })
-    found_timings = False
     for data in res:
-        if "timings" in data:
-            found_timings = True
-            assert "prompt_per_second" in data["timings"]
-            assert "predicted_per_second" in data["timings"]
-            assert "predicted_n" in data["timings"]
-            assert data["timings"]["predicted_n"] <= 10
-
-    assert found_timings, "Expected timings in response chunks"
+        assert "prompt_per_second" in data["timings"]
+        assert "predicted_per_second" in data["timings"]
+        assert "predicted_n" in data["timings"]
+        assert data["timings"]["predicted_n"] <= 10
 
 
 def test_logprobs():
