@@ -1494,6 +1494,11 @@ static void common_chat_parse_hermes_2_pro(common_chat_msg_parser & builder) {
     );
 
     if (auto res = builder.try_find_regex(open_regex)) {
+        if (res->groups[0].begin != 0 && res->groups[4].empty() && res->groups[5].empty()) {
+            // The only syntax we allow after the very start is <function=...> or <function name=...>
+            builder.add_content(builder.consume_rest());
+            return;
+        }
         GGML_ASSERT(res->prelude.empty()); // matching at_start
 
         const auto & block_start = res->groups[1];

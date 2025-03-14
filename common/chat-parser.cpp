@@ -160,7 +160,10 @@ std::optional<common_chat_msg_parser::find_regex_result> common_chat_msg_parser:
         return std::nullopt;
     }
     if (m.type == COMMON_REGEX_MATCH_TYPE_PARTIAL) {
-        incomplete(regex.str());
+        if (is_partial()) {
+            incomplete(regex.str());
+        }
+        return std::nullopt;
     }
     auto prelude = input_.substr(pos_, m.groups[0].begin - pos_);
     pos_ = m.groups[0].end;
