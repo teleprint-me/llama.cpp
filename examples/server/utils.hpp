@@ -593,17 +593,19 @@ static json oaicompat_completion_params_parse(
     // Apply chat template to the list of messages
     auto chat_params = common_chat_templates_apply(tmpls, inputs);
 
-    llama_params["chat_format"]              = static_cast<int>(chat_params.format);
-    llama_params["prompt"]                   = chat_params.prompt;
-    llama_params["grammar"]                  = chat_params.grammar;
-    llama_params["grammar_lazy"]             = chat_params.grammar_lazy;
-    llama_params["thinking_forced_open"]     = chat_params.thinking_forced_open;
+    llama_params["chat_format"]      = static_cast<int>(chat_params.format);
+    llama_params["prompt"]           = chat_params.prompt;
+    if (!chat_params.grammar.empty()) {
+        llama_params["grammar"] = chat_params.grammar;
+    }
+    llama_params["grammar_lazy"]     = chat_params.grammar_lazy;
     auto grammar_triggers = json::array();
     for (const auto & trigger : chat_params.grammar_triggers) {
         grammar_triggers.push_back(trigger.to_json<json>());
     }
     llama_params["grammar_triggers"] = grammar_triggers;
     llama_params["preserved_tokens"] = chat_params.preserved_tokens;
+    llama_params["thinking_forced_open"]     = chat_params.thinking_forced_open;
     for (const auto & stop : chat_params.additional_stops) {
         llama_params["stop"].push_back(stop);
     }
