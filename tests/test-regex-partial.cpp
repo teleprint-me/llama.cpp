@@ -4,6 +4,7 @@
 
 #include <sstream>
 #include <iostream>
+#include <optional>
 
 template <class T> static void assert_equals(const T & expected, const T & actual) {
     if (expected != actual) {

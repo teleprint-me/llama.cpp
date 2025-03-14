@@ -1,6 +1,7 @@
 #include "regex-partial.h"
 #include "common.h"
 #include <functional>
+#include <optional>
 
 common_regex::common_regex(const std::string & pattern) :
     pattern(pattern),
