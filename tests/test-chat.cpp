@@ -437,6 +437,15 @@ const common_chat_msg message_assist_call {
     /* .tool_name = */ "",
     /* .tool_call_id = */ "",
 };
+const common_chat_msg message_assist_thoughts_no_content {
+    "assistant",
+    "",
+    /* .content_parts = */ {},
+    /* .tool_calls = */ {},
+    /* .reasoning_content = */ "I'm\nthinking",
+    /* .tool_name = */ "",
+    /* .tool_call_id = */ "",
+};
 const common_chat_msg message_assist_call_empty_args {
     "assistant",
     "",
@@ -728,6 +737,18 @@ static void test_template_output_parsers() {
                 "    {\"tool_call_id\": \"0\", \"tool_name\": \"special_function\", \"parameters\": {\"arg1\": 1}}\n"
                 "]<|END_ACTION|>",
                 /* is_partial= */ false,
+                {
+                    /* .format = */ COMMON_CHAT_FORMAT_COMMAND_R7B,
+                    /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
+                    /* .reasoning_in_content = */ false,
+                    /* .thinking_forced_open = */ false,
+                }));
+        assert_msg_equals(message_assist_thoughts_no_content,
+            common_chat_parse(
+                "<|START_THINKING|>I'm\nthinking<|END_THINKING|>"
+                "<|START_ACTION|>[\n"
+                "    {\"tool_call_id\": \"0\", \"tool_name\": \"special",
+                /* is_partial= */ true,
                 {
                     /* .format = */ COMMON_CHAT_FORMAT_COMMAND_R7B,
                     /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,

@@ -927,7 +927,7 @@ static void common_chat_parse_command_r7b(common_chat_msg_parser & builder) {
     if (auto res = builder.try_find_regex(start_action_regex)) {
         // If we didn't extract thoughts, prelude includes them.
         builder.add_content(res->prelude);
-        auto partial = builder.consume_json({{}});
+        auto partial = builder.consume_json({{"parameters"}});
         for (const auto & item : partial.json) {
             std::string name = item.contains("tool_name") ? item.at("tool_name") : "";
             std::string id = item.contains("tool_call_id") ? item.at("tool_call_id") : "";
