@@ -42,13 +42,22 @@ class common_chat_msg_parser {
         pos_ -= n;
     }
 
+    // Get the substring of the input at the given range
     std::string str(const common_string_range & rng) const;
 
+    // Appends to the result.content field
     void add_content(const std::string & content);
+
+    // Appends to the result.reasoning_content field
     void add_reasoning_content(const std::string & reasoning_content);
 
+    // Adds a tool call to the result. If the tool call is too incomplete (e.g. name empty), it won't add anything.
     bool add_tool_call(const std::string & name, const std::string & id, const std::string & arguments, const common_healing_marker & healing_marker);
+
+    // Adds a tool call using the "name", "id" and "arguments" fields of the json object
     bool add_tool_call(const nlohmann::ordered_json & tool_call, const common_healing_marker & healing_marker);
+
+    // Adds an array of tool calls using their "name", "id" and "arguments" fields.
     bool add_tool_calls(const nlohmann::ordered_json & arr, const common_healing_marker & healing_marker);
 
     void finish();

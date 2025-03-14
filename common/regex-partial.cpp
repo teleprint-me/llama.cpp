@@ -49,7 +49,7 @@ common_regex_match common_regex::search(const std::string & input, size_t pos, b
     return {};
 }
 
-/*xz
+/*
   Transforms a regex pattern to a partial match pattern that operates on a reversed input string to find partial final matches of the original pattern.
 
   Ideally we'd like to use boost::match_partial (https://beta.boost.org/doc/libs/1_59_0/libs/regex/doc/html/boost_regex/partial_matches.html)
