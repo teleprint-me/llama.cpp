@@ -399,6 +399,13 @@ struct server_task {
                             params.sampling.grammar_triggers.push_back({COMMON_GRAMMAR_TRIGGER_TYPE_WORD, word});
                         }
                     } else {
+                        if (ct.type == COMMON_GRAMMAR_TRIGGER_TYPE_PATTERN) {
+                            SRV_DBG("Grammar trigger pattern: `%s`\n", ct.value.c_str());
+                        } else if (ct.type == COMMON_GRAMMAR_TRIGGER_TYPE_PATTERN_FULL) {
+                            SRV_DBG("Grammar trigger pattern full: `%s`\n", ct.value.c_str());
+                        } else {
+                            throw std::runtime_error("Unknown grammar trigger type");
+                        }
                         params.sampling.grammar_triggers.push_back(ct);
                     }
                 }
