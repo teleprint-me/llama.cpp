@@ -25,7 +25,7 @@ struct test_case {
 };
 
 static void test_regex() {
-
+    printf("[%s]\n", __func__);
     auto test = [](const test_case & test_case) {
         common_regex cr(test_case.pattern);
         std::cout << "Testing pattern: /" << test_case.pattern << "/\n";
@@ -152,6 +152,7 @@ static void test_regex() {
 }
 
 static void test_regex_to_reversed_partial_regex() {
+    printf("[%s]\n", __func__);
     assert_equals<std::string>(
         "(a+).*",
         regex_to_reversed_partial_regex("a+"));
@@ -199,12 +200,7 @@ static void test_regex_to_reversed_partial_regex() {
 }
 
 int main() {
-    try {
-        test_regex_to_reversed_partial_regex();
-        test_regex();
-    } catch (const std::exception & e) {
-        std::cerr << "Test failed: " << e.what() << '\n';
-        return 1;
-    }
+    test_regex_to_reversed_partial_regex();
+    test_regex();
     std::cout << "All tests passed.\n";
 }

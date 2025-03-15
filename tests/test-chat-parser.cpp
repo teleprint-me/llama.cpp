@@ -126,7 +126,13 @@ static void test_regex() {
   }
   {
     common_chat_msg_parser builder("Hello,", /* is_partial= */ false, {});
-    assert_equals(true, builder.try_consume_regex(common_regex("Hell(o, world!)?")).has_value());
+    auto res = builder.try_consume_regex(common_regex("H(el)l(?:o, world!)?"));
+    assert_equals(true, res.has_value());
+    // Verify captures
+    assert_equals<size_t>(2, res->groups.size());
+    assert_equals("Hell", builder.str(res->groups[0]));
+    assert_equals("el", builder.str(res->groups[1]));
+    // Verify position is after the match
     assert_equals<size_t>(4, builder.pos());
     assert_equals("o,", builder.consume_rest());
   }
