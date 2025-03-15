@@ -115,7 +115,7 @@ def do_test_completion_with_required_tool_tiny(server: ServerProcess, tool: dict
     ("meta-llama-Llama-3.3-70B-Instruct",             PYTHON_TOOL,          "code",     CompletionMode.NORMAL),
     ("meta-llama-Llama-3.3-70B-Instruct",             PYTHON_TOOL,          "code",     CompletionMode.STREAMED),
 ])
-def test_completion_with_required_tool_tiny_fast(template_name: str, tool: dict, argument_key: str | None, stream: bool):
+def test_completion_with_required_tool_tiny_fast(template_name: str, tool: dict, argument_key: str | None, stream: CompletionMode):
     global server
     n_predict = 512
     # server = ServerPreset.stories15m_moe()
