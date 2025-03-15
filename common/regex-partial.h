@@ -44,7 +44,7 @@ class common_regex {
     std::regex rx_reversed_partial;
 
   public:
-    common_regex(const std::string & pattern);
+    explicit common_regex(const std::string & pattern);
 
     common_regex_match search(const std::string & input, size_t pos, bool as_match = false) const;
 

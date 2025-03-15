@@ -2,6 +2,7 @@
 
 #include "chat.h"
 #include "json-partial.h"
+#include "json.hpp"
 #include "regex-partial.h"
 
 #include <optional>
@@ -53,13 +54,13 @@ class common_chat_msg_parser {
     void add_reasoning_content(const std::string & reasoning_content);
 
     // Adds a tool call to the result. If the tool call is too incomplete (e.g. name empty), it won't add anything.
-    bool add_tool_call(const std::string & name, const std::string & id, const std::string & arguments, const common_healing_marker & healing_marker);
+    bool add_tool_call(const std::string & name, const std::string & id, const std::string & arguments);
 
     // Adds a tool call using the "name", "id" and "arguments" fields of the json object
-    bool add_tool_call(const nlohmann::ordered_json & tool_call, const common_healing_marker & healing_marker);
+    bool add_tool_call(const nlohmann::ordered_json & tool_call);
 
     // Adds an array of tool calls using their "name", "id" and "arguments" fields.
-    bool add_tool_calls(const nlohmann::ordered_json & arr, const common_healing_marker & healing_marker);
+    bool add_tool_calls(const nlohmann::ordered_json & arr);
 
     void finish();
 
@@ -68,11 +69,9 @@ class common_chat_msg_parser {
 
     bool consume_spaces();
 
-    bool try_consume_literal(const std::string & literal);
-
     void consume_literal(const std::string & literal);
 
-    void try_consume_think_tags(const common_regex & start_think_regex, const common_regex & end_think_regex);
+    bool try_parse_reasoning(const std::string & start_think, const std::string & end_think);
 
     std::string consume_rest();
 
@@ -83,6 +82,10 @@ class common_chat_msg_parser {
 
     std::optional<find_regex_result> try_find_regex(const common_regex & regex, size_t from = std::string::npos);
 
+    bool try_consume_literal(const std::string & literal);
+
+    std::optional<find_regex_result> try_find_literal(const std::string & literal);
+
     struct consume_regex_result {
         std::vector<common_string_range> groups;
     };
@@ -90,11 +93,13 @@ class common_chat_msg_parser {
 
     std::optional<consume_regex_result> try_consume_regex(const common_regex & regex);
 
-    common_json consume_json(
+    std::optional<common_json> try_consume_json();
+    common_json consume_json();
+
+    nlohmann::ordered_json consume_json_with_dumped_args(
         const std::vector<std::vector<std::string>> & args_paths = {}
     );
-
-    std::optional<common_json> try_consume_json(
+    std::optional<nlohmann::ordered_json> try_consume_json_with_dumped_args(
         const std::vector<std::vector<std::string>> & args_paths = {}
     );
 };

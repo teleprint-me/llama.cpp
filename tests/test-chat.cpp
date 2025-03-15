@@ -415,8 +415,11 @@ const std::vector<common_chat_tool_call> tool_calls_id {
 const std::vector<common_chat_tool_call> tool_calls_python {
     { "python", "{\"code\": \"print('hey')\"}", /* .id = */ "" },
 };
-const std::vector<common_chat_tool_call> tool_calls_python_unclosed {
-    { "python", "{\"code\":\"print('hey')", /* .id = */ "" },
+const std::vector<common_chat_tool_call> tool_calls_python_lines {
+    { "python", "{\"code\": \"# This is a program:\\nprint('hey')\"}", /* .id = */ "" },
+};
+const std::vector<common_chat_tool_call> tool_calls_python_lines_unclosed {
+    { "python", "{\"code\":\"# This is a program:\\nprint('hey')", /* .id = */ "" },
 };
 
 const common_chat_msg message_assist_empty {
@@ -518,11 +521,20 @@ const common_chat_msg message_assist_call_python {
     /* .tool_name = */ "",
     /* .tool_call_id = */ "",
 };
-const common_chat_msg message_assist_call_python_unclosed {
+const common_chat_msg message_assist_call_python_lines {
     "assistant",
     "",
     /* .content_parts = */ {},
-    tool_calls_python_unclosed,
+    tool_calls_python_lines,
+    /* .reasoning_content = */ "",
+    /* .tool_name = */ "",
+    /* .tool_call_id = */ "",
+};
+const common_chat_msg message_assist_call_python_lines_unclosed {
+    "assistant",
+    "",
+    /* .content_parts = */ {},
+    tool_calls_python_lines_unclosed,
     /* .reasoning_content = */ "",
     /* .tool_name = */ "",
     /* .tool_call_id = */ "",
@@ -853,6 +865,27 @@ static void test_template_output_parsers() {
 
         // Test parsing
         assert_msg_equals(
+            {
+                /* .role = */ "assistant",
+                /* .content = */ "",
+                /* .content_parts = */ {},
+                /* .tool_calls = */ {
+                    {
+                        /* .name = */ "python",
+                        /* .arguments = */ "",
+                        /* .id = */ "",
+                    }
+                },
+                /* .reasoning_content = */ "",
+                /* .tool_name = */ "",
+                /* .tool_call_id = */ "",
+            },
+            common_chat_parse(
+                "```json\n"
+                "<function_call> { \"name\" : \"python\"",
+                /* is_partial= */ true,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
+        assert_msg_equals(
             message_assist_call,
             common_chat_parse(
                 "<tool_call>\n"
@@ -1024,9 +1057,9 @@ static void test_template_output_parsers() {
                       "<tool_call>\n"
                       "{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
                       "</tool_call>");
-        test_templates(tmpls.get(), end_tokens, message_assist_call_python, tools,
+        test_templates(tmpls.get(), end_tokens, message_assist_call_python_lines, tools,
                       "<tool_call>\n"
-                      "{\"name\": \"python\", \"arguments\": {\"code\": \"print('hey')\"}}\n"
+                      "{\"name\": \"python\", \"arguments\": {\"code\": \"# This is a program:\\nprint('hey')\"}}\n"
                       "</tool_call>");
     }
     {
@@ -1097,15 +1130,17 @@ static void test_template_output_parsers() {
                 "{\"arg1\": 1}\n",
                 /* is_partial= */ false,
                 {COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2}));
-        assert_msg_equals(message_assist_call_python,
+        assert_msg_equals(message_assist_call_python_lines,
             common_chat_parse(
                 "python\n"
+                "# This is a program:\n"
                 "print('hey')",
                 /* is_partial= */ false,
                 {COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2}));
-        assert_msg_equals(message_assist_call_python_unclosed,
+        assert_msg_equals(message_assist_call_python_lines_unclosed,
             common_chat_parse(
                 "python\n"
+                "# This is a program:\n"
                 "print('hey')",
                 /* is_partial= */ true,
                 {COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2}));

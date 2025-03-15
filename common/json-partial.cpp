@@ -144,6 +144,17 @@ bool common_json_parse(
                 throw std::runtime_error("Cannot heal a truncated JSON that stopped in an unknown location");
             }
             auto last_non_sp_char = str[last_non_sp_pos];
+            // Used to detect stops on a number, which may not be complete.
+            auto was_maybe_number = [&]() {
+                if (!str.empty() && std::isspace(str.back())) {
+                    return false;
+                }
+                return std::isdigit(last_non_sp_char) ||
+                    last_non_sp_char == '.' ||
+                    last_non_sp_char == 'e' ||
+                    last_non_sp_char == 'E' ||
+                    last_non_sp_char == '-';
+            };
 
             std::string closing;
             for (size_t i = err_loc.stack.size(); i > 0; i--) {
@@ -194,7 +205,7 @@ bool common_json_parse(
                 } else if (str[str.length() - 1] == '\\' && can_parse(str + "\\\"" + closing)) {
                     // Was inside an array value string after an escape
                     str += (out.healing_marker.json_dump_marker = "\\" + magic_seed) + "\"" + closing;
-                } else if (!std::isdigit(last_non_sp_char) && last_non_sp_char != '.' && last_non_sp_char != 'e' && last_non_sp_char != 'E' && last_non_sp_char != '-' && can_parse(str + ", 1" + closing)) {
+                } else if (!was_maybe_number() && can_parse(str + ", 1" + closing)) {
                     // Had just finished a value
                     str += (out.healing_marker.json_dump_marker = ",\"" + magic_seed) + "\"" + closing;
                 } else {
@@ -209,7 +220,7 @@ bool common_json_parse(
                 if (last_non_sp_char == ',' || last_non_sp_char == '{') {
                     // Was about to create an object key+value
                     str += (out.healing_marker.json_dump_marker = "\"" + magic_seed) + "\": 1" + closing;
-                } else if (can_parse(str + ",\"\": 1" + closing)) {
+                } else if (!was_maybe_number() && can_parse(str + ",\"\": 1" + closing)) {
                     // Was about to create an object key+value
                     str += (out.healing_marker.json_dump_marker = ",\"" + magic_seed) + "\": 1" + closing;
                 } else if (can_parse(str + "\": 1" + closing)) {
