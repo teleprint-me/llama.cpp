@@ -47,7 +47,7 @@ bool common_chat_msg_parser::add_tool_call(const std::string & name, const std::
     tool_call.arguments = arguments;
     tool_call.id = id;
 
-    LOG_DBG("Tool call arguments:\n\traw: %s\n\tresult: %s\n", arguments.c_str(), tool_call.arguments.c_str());
+    // LOG_DBG("Tool call arguments:\n\traw: %s\n\tresult: %s\n", arguments.c_str(), tool_call.arguments.c_str());
     result_.tool_calls.emplace_back(tool_call);
     return true;
 }
@@ -166,6 +166,8 @@ bool common_chat_msg_parser::try_parse_reasoning(const std::string & start_think
                 incomplete("Failed to find end of reasoning tag " + end_think);
             }
             return true;
+        } else {
+            return false;
         }
         if (auto res = try_find_literal(end_think)) {
             handle_reasoning(res->prelude, /* closed */ true);
@@ -249,7 +251,7 @@ common_json common_chat_msg_parser::consume_json() {
     incomplete("Failed to consume JSON");
 }
 
-nlohmann::ordered_json common_chat_msg_parser::consume_json_with_dumped_args(
+common_chat_msg_parser::consume_json_result common_chat_msg_parser::consume_json_with_dumped_args(
     const std::vector<std::vector<std::string>> & args_paths
 ) {
     if (auto result = try_consume_json_with_dumped_args(args_paths)) {
@@ -258,7 +260,7 @@ nlohmann::ordered_json common_chat_msg_parser::consume_json_with_dumped_args(
     incomplete("Failed to consume JSON");
 }
 
-std::optional<nlohmann::ordered_json> common_chat_msg_parser::try_consume_json_with_dumped_args(
+std::optional<common_chat_msg_parser::consume_json_result> common_chat_msg_parser::try_consume_json_with_dumped_args(
     const std::vector<std::vector<std::string>> & args_paths
 ) {
     auto partial = try_consume_json();
@@ -272,16 +274,23 @@ std::optional<nlohmann::ordered_json> common_chat_msg_parser::try_consume_json_w
     if (partial->healing_marker.marker.empty()) {
         if (args_paths.empty()) {
             // No arguments to dump, and JSON was parsed fully.
-            return partial->json;
+            return consume_json_result {
+                partial->json,
+                /* .is_partial = */ false,
+            };
         }
         if (is_arguments_path({})) {
             // Entire JSON is the arguments and was parsed fully.
-            return partial->json.dump();
+            return consume_json_result {
+                partial->json.dump(),
+                /* .is_partial = */ false,
+            };
         }
     }
 
     LOG_DBG("Parsed partial JSON: %s (json_healing_marker: %s)\n", partial->json.dump().c_str(), partial->healing_marker.json_dump_marker.c_str());
 
+    auto found_healing_marker = false;
     std::vector<std::string> path;
     std::function<json(const json &)> remove_unsupported_healings_and_dump_args = [&](const json & j) -> json {
         if (is_arguments_path(path)) {
@@ -290,6 +299,7 @@ std::optional<nlohmann::ordered_json> common_chat_msg_parser::try_consume_json_w
                 auto idx = arguments.find(partial->healing_marker.json_dump_marker);
                 if (idx != std::string::npos) {
                     arguments.resize(idx);
+                    found_healing_marker = true;
                 }
                 if (arguments == "\"") {
                     // This happens because of completing `:"$magic` after `"arguments"`
@@ -306,12 +316,14 @@ std::optional<nlohmann::ordered_json> common_chat_msg_parser::try_consume_json_w
                 const std::string key_str = key; // NOLINT
                 auto idx = key_str.find(healing_marker_);
                 if (idx != std::string::npos) {
+                    found_healing_marker = true;
                     break;
                 }
                 path.push_back(key_str);
                 if (value.is_string()) {
                     const std::string value_str = value;
                     if (value_str.find(healing_marker_) != std::string::npos) {
+                        found_healing_marker = true;
                         break;
                     }
                     obj[key] = value;
@@ -330,8 +342,7 @@ std::optional<nlohmann::ordered_json> common_chat_msg_parser::try_consume_json_w
                     auto idx = str.find(healing_marker_);
                     if (idx != std::string::npos) {
                         // Don't heal array values that aren't in the arguments.
-                        // arr.push_back(partial->healing_marker.marker);
-                        // partial->healing_marker.json_dump_marker = partial->healing_marker.marker;
+                        found_healing_marker = true;
                         break;
                     }
                 }
@@ -344,5 +355,8 @@ std::optional<nlohmann::ordered_json> common_chat_msg_parser::try_consume_json_w
 
     auto cleaned = remove_unsupported_healings_and_dump_args(partial->json);
     LOG_DBG("Cleaned up JSON %s to %s (json_healing_marker : '%s')\n", partial->json.dump().c_str(), cleaned.dump().c_str(), partial->healing_marker.json_dump_marker.c_str());
-    return cleaned;
+    return consume_json_result {
+        cleaned,
+        /* .is_partial = */ found_healing_marker,
+    };
 }

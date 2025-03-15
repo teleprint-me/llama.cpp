@@ -137,8 +137,9 @@ def test_completion_with_required_tool_tiny_fast(template_name: str, tool: dict,
     ("meetkai-functionary-medium-v3.1",               PYTHON_TOOL,          "code",    CompletionMode.STREAMED),
 
     ("meetkai-functionary-medium-v3.2",               TEST_TOOL,            "success", CompletionMode.NORMAL),
-    ("meetkai-functionary-medium-v3.2",               PYTHON_TOOL,          "code",    CompletionMode.NORMAL),
-    ("meetkai-functionary-medium-v3.2",               PYTHON_TOOL,          "code",    CompletionMode.STREAMED),
+    # Functionary v3.2 format supports raw python content, which w/ a dummy stories model will never end on its own.
+    # ("meetkai-functionary-medium-v3.2",               PYTHON_TOOL,          "code",    CompletionMode.NORMAL),
+    # ("meetkai-functionary-medium-v3.2",               PYTHON_TOOL,          "code",    CompletionMode.STREAMED),
 
     ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", TEST_TOOL,            "success", CompletionMode.NORMAL),
     ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", PYTHON_TOOL,          "code",    CompletionMode.NORMAL),

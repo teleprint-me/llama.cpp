@@ -397,6 +397,15 @@ const common_chat_msg message_assist_thoughts {
     /* .tool_name = */ "",
     /* .tool_call_id = */ "",
 };
+const common_chat_msg message_assist_thoughts_unclosed_unparsed {
+    "assistant",
+    "I'm thinking</think>Hello, world!\nWhat's up?",
+    /* .content_parts = */ {},
+    /* .tool_calls = */ {},
+    /* .reasoning_content = */ "",
+    /* .tool_name = */ "",
+    /* .tool_call_id = */ "",
+};
 const std::vector<common_chat_tool_call> tool_calls {
     { "special_function", "{\"arg1\": 1}", /* .id = */ "" },
 };
@@ -1041,7 +1050,7 @@ static void test_template_output_parsers() {
                     /* .reasoning_in_content = */ false,
                     /* .thinking_forced_open = */ false,
                 }));
-        assert_msg_equals(message_assist_thoughts,
+        assert_msg_equals(message_assist_thoughts_unclosed_unparsed,
             common_chat_parse(
                 "I'm thinking</think>Hello, world!\nWhat's up?",
                 /* is_partial= */ false,
@@ -1050,6 +1059,16 @@ static void test_template_output_parsers() {
                     /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
                     /* .reasoning_in_content = */ false,
                     /* .thinking_forced_open = */ false,
+                }));
+        assert_msg_equals(message_assist_thoughts,
+            common_chat_parse(
+                "I'm thinking</think>Hello, world!\nWhat's up?",
+                /* is_partial= */ false,
+                {
+                    /* .format = */ COMMON_CHAT_FORMAT_HERMES_2_PRO,
+                    /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
+                    /* .reasoning_in_content = */ false,
+                    /* .thinking_forced_open = */ true,
                 }));
 
         test_templates(tmpls.get(), end_tokens, message_assist, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
@@ -1200,7 +1219,7 @@ static void test_template_output_parsers() {
                     /* .reasoning_in_content = */ false,
                     /* .thinking_forced_open = */ false,
                 }));
-        assert_msg_equals(message_assist_thoughts,
+        assert_msg_equals(message_assist_thoughts_unclosed_unparsed,
             common_chat_parse(
                 "I'm thinking</think>Hello, world!\nWhat's up?",
                 /* is_partial= */ false,
@@ -1211,6 +1230,16 @@ static void test_template_output_parsers() {
                     /* .thinking_forced_open = */ false,
                 }));
         assert_msg_equals(message_assist_thoughts,
+            common_chat_parse(
+                "I'm thinking</think>Hello, world!\nWhat's up?",
+                /* is_partial= */ false,
+                {
+                    /* .format = */ COMMON_CHAT_FORMAT_DEEPSEEK_R1,
+                    /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
+                    /* .reasoning_in_content = */ false,
+                    /* .thinking_forced_open = */ true,
+                }));
+        assert_msg_equals(message_assist_thoughts,
             // Latest template update (ast of 20250209) adds a trailing <think>\n if add_generation_prompt is true.
             common_chat_parse(
                 "I'm thinking</think>Hello, world!\nWhat's up?",
@@ -1219,7 +1248,7 @@ static void test_template_output_parsers() {
                     /* .format = */ COMMON_CHAT_FORMAT_DEEPSEEK_R1,
                     /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
                     /* .reasoning_in_content = */ false,
-                    /* .thinking_forced_open = */ false,
+                    /* .thinking_forced_open = */ true,
                 }));
         // test_templates(tmpls.get(), end_tokens, message_assist_call, tools,
         //               "<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>function<｜tool▁sep｜>special_function\n"
@@ -1262,7 +1291,7 @@ static void test_template_output_parsers() {
                     /* .format = */ COMMON_CHAT_FORMAT_DEEPSEEK_R1,
                     /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
                     /* .reasoning_in_content = */ false,
-                    /* .thinking_forced_open = */ false,
+                    /* .thinking_forced_open = */ true,
                 }));
 
         assert_msg_equals(message_assist_call_thoughts_unparsed,

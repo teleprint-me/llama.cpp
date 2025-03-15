@@ -96,10 +96,15 @@ class common_chat_msg_parser {
     std::optional<common_json> try_consume_json();
     common_json consume_json();
 
-    nlohmann::ordered_json consume_json_with_dumped_args(
+    struct consume_json_result {
+        nlohmann::ordered_json value;
+        bool is_partial;
+    };
+
+    consume_json_result consume_json_with_dumped_args(
         const std::vector<std::vector<std::string>> & args_paths = {}
     );
-    std::optional<nlohmann::ordered_json> try_consume_json_with_dumped_args(
+    std::optional<consume_json_result> try_consume_json_with_dumped_args(
         const std::vector<std::vector<std::string>> & args_paths = {}
     );
 };

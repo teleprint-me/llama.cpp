@@ -96,7 +96,8 @@ static void test_json_with_dumped_args_no_args() {
     common_chat_msg_parser builder(input, is_partial, {});
     auto js = builder.try_consume_json_with_dumped_args(args_paths);
     assert_equals(true, js.has_value());
-    assert_equals(expected, args_paths.size() == 1 && args_paths[0].empty() ? js->get<std::string>() : js->dump());
+    assert_equals(is_partial, js->is_partial);
+    assert_equals(expected, args_paths.size() == 1 && args_paths[0].empty() ? js->value.get<std::string>() : js->value.dump());
   };
 
   // Normal JSON, nothing to heal, nothing to dump
@@ -129,19 +130,21 @@ static void test_json_with_dumped_args_no_args() {
 }
 
 static void test_json_with_dumped_args() {
-  auto test = [](const std::string & input, const std::string & expected, bool is_partial = true) {
-    common_chat_msg_parser builder(input, is_partial, {});
+  auto test = [](const std::string & input, const std::string & expected, bool parse_as_partial = true, bool is_partial = true) {
+    common_chat_msg_parser builder(input, parse_as_partial, {});
     auto js = builder.try_consume_json_with_dumped_args({{"args"}});
     assert_equals(true, js.has_value());
-    assert_equals(expected, js->dump());
+    assert_equals(is_partial, js->is_partial);
+    assert_equals(expected, js->value.dump());
   };
 
   // Full JSON w/ args
-  for (auto is_partial : {true, false}) {
+  for (auto parse_as_partial : {true, false}) {
     test(
       R"({"name": "python", "args": {"arg1": 1}})",
       R"({"name":"python","args":"{\"arg1\":1}"})",
-      is_partial
+      parse_as_partial,
+      /* is_partial= */ false
     );
   }
 
