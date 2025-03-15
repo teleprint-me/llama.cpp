@@ -1137,7 +1137,6 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
             // Distill Qwen 7B & 32B models seem confused re/ syntax of their tool call opening tag,
             // so we accept common variants (then it's all constrained)
             builder.add_rule("root",
-                std::string(data.thinking_forced_open ? "\"</think>\" space " : "") +
                 "( \"<｜tool▁calls▁begin｜>\" | \"<｜tool_calls_begin｜>\" | \"<｜tool calls begin｜>\" | \"<｜tool\\\\_calls\\\\_begin｜>\" | \"<｜tool▁calls｜>\" ) "
                 "(" + string_join(tool_rules, " | ") + ")" + (inputs.parallel_tool_calls ? "*" : "") + " "
                 "\"<｜tool▁calls▁end｜>\""
@@ -1427,7 +1426,6 @@ static common_chat_params common_chat_params_init_hermes_2_pro(const common_chat
             "( \"```\\n\" | \"```json\\n\" | \"```xml\\n\" ) space " + wrappable_tool_call + " space \"```\" space ");
         auto tool_call = builder.add_rule("tool_call", string_join(tool_call_alts, " | "));
         builder.add_rule("root",
-            std::string(data.thinking_forced_open ? "\"</think>\" space " : "") +
             (inputs.parallel_tool_calls ? "(" + tool_call + ")+" : tool_call));
         // Trigger on some common known "good bad" outputs (only from the start and with a json that's about a specific argument name to avoid false positives)
         data.grammar_triggers.push_back({
