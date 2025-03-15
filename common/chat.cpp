@@ -619,6 +619,7 @@ static void parse_json_tool_calls(
         if (block_close) {
             builder.consume_regex(*block_close);
         }
+        builder.consume_spaces();
         builder.add_content(builder.consume_rest());
     };
     if (block_open) {

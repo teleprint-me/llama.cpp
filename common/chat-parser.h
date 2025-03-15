@@ -65,7 +65,7 @@ class common_chat_msg_parser {
     void finish();
 
     [[noreturn]]
-    static void incomplete(const std::string & message);
+    void incomplete(const std::string & message);
 
     bool consume_spaces();
 
