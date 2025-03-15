@@ -1468,26 +1468,26 @@ static void common_chat_parse_hermes_2_pro(common_chat_msg_parser & builder) {
 
     static const common_regex open_regex(
         "(?:"
-        "(```(?:xml|json)?\\n\\s*)?"         // match 1 (block_start)
-        "(<tool_call>"                   // match 2 (open_tag)
-        "|<function_call>"
-        "|<tool>"
-        "|<tools>"
-        "|<response>"
-        "|<json>"
-        "|<xml>"
-        "|<JSON>"
-        ")?"
-        "(\\s*\\{\\s*\"name\"\\s*:[\\s\\S]*)"    // match 3 (named tool call + rest)
+            "(```(?:xml|json)?\\n\\s*)?" // match 1 (block_start)
+            "("                          // match 2 (open_tag)  
+                "<tool_call>"                   
+                "|<function_call>"
+                "|<tool>"
+                "|<tools>"
+                "|<response>"
+                "|<json>"
+                "|<xml>"
+                "|<JSON>"
+            ")?"
+            "(\\s*\\{\\s*\"name\"\\s*:)" // match 3 (named tool call)
         ")"
-        "|"
-        "(?:<function=([^>]+)>"            // match 4 (function name)
-        "|<function name=\"([^\"]+)\">)"  // match 5 (function name again)
-        "([\\s\\S]*)"                    // match 6 (function arguments + rest)})"
+        "|<function=([^>]+)>"            // match 4 (function name)
+        "|<function name=\"([^\"]+)\">"  // match 5 (function name again)
     );
 
+    auto start = builder.pos();
     if (auto res = builder.try_find_regex(open_regex)) {
-        if (res->groups[0].begin != 0 && res->groups[4].empty() && res->groups[5].empty()) {
+        if (res->groups[0].begin != start && res->groups[4].empty() && res->groups[5].empty()) {
             // The only syntax we allow after the very start is <function=...> or <function name=...>
             builder.add_content(builder.consume_rest());
             return;
@@ -1527,9 +1527,6 @@ static void common_chat_parse_hermes_2_pro(common_chat_msg_parser & builder) {
             GGML_ASSERT(!function_name.empty());
 
             close_tag = "</function>";
-
-            // Start parsing from after the opening tags
-            builder.move_to(res->groups[6].begin);
 
             if (auto arguments = builder.try_consume_json_with_dumped_args({{}})) {
                 if (!builder.add_tool_call(function_name, "", arguments->value) || arguments->is_partial) {
