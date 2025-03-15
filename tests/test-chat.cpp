@@ -1156,8 +1156,7 @@ static void test_template_output_parsers() {
                 "all\n"
                 "Hello, world!\n"
                 "nono\n"
-                "What's up?\n"
-                ">>>special_function\n"
+                "What's up?>>>special_function\n"
                 "{\"arg1\": 1}\n",
                 /* is_partial= */ false,
                 {COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2}));

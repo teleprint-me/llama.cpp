@@ -30,12 +30,11 @@ static void assert_equals(const char * expected, const std::string & actual) {
   return assert_equals<std::string>(expected, actual);
 }
 
-template <class T = std::exception>
 static void assert_throws(const std::function<void()> & fn, const std::string & expected_exception_pattern = "") {
     try {
         fn();
-    } catch (const T & e) {
-        if (expected_exception_pattern.empty()) {
+    } catch (const std::exception & e) {
+      if (expected_exception_pattern.empty()) {
           return;
         }
         std::regex expected_exception_regex(expected_exception_pattern);
@@ -44,6 +43,7 @@ static void assert_throws(const std::function<void()> & fn, const std::string & 
             return;
         }
         throw std::runtime_error("Exception doesn't match expected pattern: " + actual_message + " (pattern: " + expected_exception_pattern + ")");
+        throw std::runtime_error("Exception of unexpected type: " + std::string(e.what()));
     }
     throw std::runtime_error("Exception was expected but not thrown");
 }
@@ -123,12 +123,17 @@ static void test_regex() {
     // When in non partial mode, we can say whether the regex was consumed or not.
     common_chat_msg_parser builder("Hello,", /* is_partial= */ false, {});
     assert_equals(false, builder.try_consume_regex(common_regex("Hello, world!")).has_value());
+  }
+  {
+    common_chat_msg_parser builder("Hello,", /* is_partial= */ false, {});
     assert_equals(true, builder.try_consume_regex(common_regex("Hell(o, world!)?")).has_value());
+    assert_equals<size_t>(4, builder.pos());
+    assert_equals("o,", builder.consume_rest());
   }
   {
     // But in partial mode, we have a partial final match / can't decide, so we throw a partial exception.
     common_chat_msg_parser builder("Hello,", /* is_partial= */ true, {});
-    assert_throws<common_chat_msg_partial_exception>([&]() {
+    assert_throws([&]() {
       builder.try_consume_regex(common_regex("Hello, world!"));
     }, "^Hello, world!$");
   }
@@ -277,7 +282,46 @@ static void test_json_with_dumped_args() {
   );
 }
 
+static void test_positions() {
+  {
+    common_chat_msg_parser builder("Hello, world!", /* is_partial= */ false, {});
+    assert_equals<size_t>(0, builder.pos());
+    assert_throws([&]() { builder.move_to(100); });
+    assert_equals<size_t>(0, builder.pos());
+    assert_throws([&]() { builder.move_back(1); });
+    assert_equals<size_t>(0, builder.pos());
+
+    builder.move_to(8);
+    assert_equals<size_t>(8, builder.pos());
+    builder.move_back(1);
+    assert_equals<size_t>(7, builder.pos());
+    assert_equals("world!", builder.consume_rest());
+
+    builder.move_to(0);
+    assert_equals<size_t>(0, builder.pos());
+
+    assert_throws([&]() { builder.incomplete("whatevs"); }, "^whatevs$");
+
+    assert_throws([&]() { builder.finish(); });
+    assert_equals<size_t>(0, builder.pos());
+
+    builder.move_to(builder.input().size());
+    builder.finish();
+  }
+  {
+    common_chat_msg_parser builder("Hello, world!", /* is_partial= */ true, {});
+
+    assert_throws([&]() { builder.incomplete("whatevs"); }, "whatevs$");
+    assert_equals<size_t>(0, builder.pos());
+
+    builder.move_to(builder.input().size());
+    assert_equals<size_t>(builder.input().size(), builder.pos());
+    builder.finish();
+  }
+}
+
 int main() {
+    test_positions();
     test_json_with_dumped_args_no_args();
     test_json_with_dumped_args();
     test_reasoning();

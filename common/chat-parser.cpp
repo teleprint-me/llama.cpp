@@ -70,17 +70,10 @@ void common_chat_msg_parser::finish() {
     if (!is_partial_ && pos_ != input_.size()) {
         throw std::runtime_error("Unexpected content at end of input: " + input_.substr(pos_));
     }
-    result_.reasoning_content = string_strip(result_.reasoning_content);
-    if (!result_.tool_calls.empty()) {
-        result_.content = string_strip(result_.content);
-    }
 }
 
 [[noreturn]]
 void common_chat_msg_parser::incomplete(const std::string & message) {
-    if (is_partial_) {
-        finish();
-    }
     throw common_chat_msg_partial_exception(message);
 }
 
