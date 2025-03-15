@@ -5,6 +5,7 @@
 //
 //    cmake -B build && cmake --build build --parallel && ./build/bin/test-chat ../minja/build/tests/*.jinja 2>/dev/null
 //
+#include <exception>
 #include <iostream>
 #include <json.hpp>
 #include <string>
@@ -29,9 +30,27 @@ static void assert_equals(const char * expected, const std::string & actual) {
   return assert_equals<std::string>(expected, actual);
 }
 
+template <class T = std::exception>
+static void assert_throws(const std::function<void()> & fn, const std::string & expected_exception_pattern = "") {
+    try {
+        fn();
+    } catch (const T & e) {
+        if (expected_exception_pattern.empty()) {
+          return;
+        }
+        std::regex expected_exception_regex(expected_exception_pattern);
+        std::string actual_message = e.what();
+        if (std::regex_search(actual_message, expected_exception_regex)) {
+            return;
+        }
+        throw std::runtime_error("Exception doesn't match expected pattern: " + actual_message + " (pattern: " + expected_exception_pattern + ")");
+    }
+    throw std::runtime_error("Exception was expected but not thrown");
+}
+
 static void test_reasoning() {
   {
-    common_chat_msg_parser builder("<tnk>Cogito</tnk>Ergo sum", false, {
+    common_chat_msg_parser builder("<tnk>Cogito</tnk>Ergo sum", /* is_partial= */ false, {
         /* .format = */ COMMON_CHAT_FORMAT_CONTENT_ONLY,
         /* .reasoning_format = */ COMMON_REASONING_FORMAT_NONE,
         /* .reasoning_in_content = */ false,
@@ -41,7 +60,7 @@ static void test_reasoning() {
     assert_equals("<tnk>Cogito</tnk>Ergo sum", builder.consume_rest());
   }
   {
-    common_chat_msg_parser builder("<tnk>Cogito</tnk>Ergo sum", false, {
+    common_chat_msg_parser builder("<tnk>Cogito</tnk>Ergo sum", /* is_partial= */ false, {
         /* .format = */ COMMON_CHAT_FORMAT_CONTENT_ONLY,
         /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
         /* .reasoning_in_content = */ false,
@@ -52,7 +71,7 @@ static void test_reasoning() {
     assert_equals("Ergo sum", builder.consume_rest());
   }
   {
-    common_chat_msg_parser builder("Cogito</tnk>Ergo sum", false, {
+    common_chat_msg_parser builder("Cogito</tnk>Ergo sum", /* is_partial= */ false, {
         /* .format = */ COMMON_CHAT_FORMAT_CONTENT_ONLY,
         /* .reasoning_format = */ COMMON_REASONING_FORMAT_NONE,
         /* .reasoning_in_content = */ false,
@@ -62,7 +81,7 @@ static void test_reasoning() {
     assert_equals("Cogito</tnk>Ergo sum", builder.consume_rest());
   }
   {
-    common_chat_msg_parser builder("Cogito</tnk>Ergo sum", false, {
+    common_chat_msg_parser builder("Cogito</tnk>Ergo sum", /* is_partial= */ false, {
         /* .format = */ COMMON_CHAT_FORMAT_CONTENT_ONLY,
         /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
         /* .reasoning_in_content = */ false,
@@ -73,7 +92,7 @@ static void test_reasoning() {
     assert_equals("Ergo sum", builder.consume_rest());
   }
   {
-    common_chat_msg_parser builder("Cogito</tnk>Ergo sum", false, {
+    common_chat_msg_parser builder("Cogito</tnk>Ergo sum", /* is_partial= */ false, {
         /* .format = */ COMMON_CHAT_FORMAT_CONTENT_ONLY,
         /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
         /* .reasoning_in_content = */ true,
@@ -86,8 +105,42 @@ static void test_reasoning() {
 }
 
 static void test_regex() {
+  auto test_throws = [](const std::string & input, const std::string & regex, const std::string & expected_exception_pattern = "") {
+    common_chat_msg_parser builder(input, /* is_partial= */ false, {});
+    assert_throws([&]() { builder.consume_regex(common_regex(regex)); }, expected_exception_pattern);
+  };
+
+  test_throws("Hello, world!", "abc", "^abc$");
+  test_throws("Hello, world!", "e", "^e$");
+
   {
-    common_chat_msg_parser builder("Hello, world!", false, common_chat_syntax());
+    common_chat_msg_parser builder("Hello, world!", /* is_partial= */ false, {});
+    builder.consume_regex(common_regex("Hello"));
+    assert_equals(", world!", builder.consume_rest());
+  }
+
+  {
+    // When in non partial mode, we can say whether the regex was consumed or not.
+    common_chat_msg_parser builder("Hello,", /* is_partial= */ false, {});
+    assert_equals(false, builder.try_consume_regex(common_regex("Hello, world!")).has_value());
+    assert_equals(true, builder.try_consume_regex(common_regex("Hell(o, world!)?")).has_value());
+  }
+  {
+    // But in partial mode, we have a partial final match / can't decide, so we throw a partial exception.
+    common_chat_msg_parser builder("Hello,", /* is_partial= */ true, {});
+    assert_throws<common_chat_msg_partial_exception>([&]() {
+      builder.try_consume_regex(common_regex("Hello, world!"));
+    }, "^Hello, world!$");
+  }
+
+  // Now regardless of the mode, we can tell these aren't a match.
+  for (const auto is_partial : {false, true}) {
+    common_chat_msg_parser builder("Hello,", is_partial, {});
+    assert_equals(false, builder.try_consume_regex(common_regex("a(b|c)(d|e)f")).has_value());
+  }
+  for (const auto is_partial : {false, true}) {
+    common_chat_msg_parser builder("Hello,", is_partial, {});
+    assert_equals(false, builder.try_consume_literal("Oh"));
   }
 }
 

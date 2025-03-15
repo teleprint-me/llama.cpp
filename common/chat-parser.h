@@ -18,10 +18,10 @@ class common_chat_msg_parser {
     std::string input_;
     bool is_partial_;
     common_chat_syntax syntax_;
+    std::string healing_marker_;
 
     size_t pos_ = 0;
     common_chat_msg result_;
-    std::string healing_marker_;
 
   public:
     common_chat_msg_parser(const std::string & input, bool is_partial, const common_chat_syntax & syntax);
