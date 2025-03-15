@@ -1130,7 +1130,7 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
                 auto parameters = function.at("parameters");
                 builder.resolve_refs(parameters);
                 tool_rules.push_back(builder.add_rule(name + "-call",
-                    "\"<｜tool▁call▁begin｜>function<｜tool▁sep｜>" + name + "\\n"
+                    "( \"<｜tool▁call▁begin｜>\" )? \"function<｜tool▁sep｜>" + name + "\\n"
                     "```json\\n\" " + builder.add_schema(name + "-args", parameters) + " "
                     "\"```<｜tool▁call▁end｜>\""));
             });
@@ -1138,14 +1138,14 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
             // so we accept common variants (then it's all constrained)
             builder.add_rule("root",
                 std::string(data.thinking_forced_open ? "\"</think>\" space " : "") +
-                "( \"<｜tool▁calls▁begin｜>\" | \"<｜tool_calls_begin｜>\" | \"<｜tool calls begin｜>\" | \"<｜tool\\\\_calls\\\\_begin｜>\" ) "
+                "( \"<｜tool▁calls▁begin｜>\" | \"<｜tool_calls_begin｜>\" | \"<｜tool calls begin｜>\" | \"<｜tool\\\\_calls\\\\_begin｜>\" | \"<｜tool▁calls｜>\" ) "
                 "(" + string_join(tool_rules, " | ") + ")" + (inputs.parallel_tool_calls ? "*" : "") + " "
                 "\"<｜tool▁calls▁end｜>\""
                 " space");
             data.grammar_triggers.push_back({
                 COMMON_GRAMMAR_TRIGGER_TYPE_PATTERN_FULL,
                 std::string(data.thinking_forced_open ? "[\\s\\S]*?</think>" : "(?:<think>[\\s\\S]*?</think>)?") +
-                    "\\s*(<｜tool▁calls▁begin｜>|<｜tool_calls_begin｜>|<｜tool calls begin｜>|<｜tool\\\\_calls\\\\_begin｜>)[\\s\\S]*"
+                    "\\s*(<｜tool▁calls▁begin｜>|<｜tool_calls_begin｜>|<｜tool calls begin｜>|<｜tool\\\\_calls\\\\_begin｜>|<｜tool▁calls｜>)[\\s\\S]*"
             });
             data.preserved_tokens = {
                 "<think>",
@@ -1163,9 +1163,9 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
 static void common_chat_parse_deepseek_r1(common_chat_msg_parser & builder) {
     builder.try_parse_reasoning("<think>", "</think>");
 
-    static const common_regex tool_calls_begin("[\\s\\r\\n]*(?:<｜tool▁calls▁begin｜>|<｜tool_calls_begin｜>|<｜tool calls begin｜>|<｜tool\\\\_calls\\\\_begin｜>)");
+    static const common_regex tool_calls_begin("[\\s\\r\\n]*(?:<｜tool▁calls▁begin｜>|<｜tool_calls_begin｜>|<｜tool calls begin｜>|<｜tool\\\\_calls\\\\_begin｜>|<｜tool▁calls｜>)");
     static const common_regex tool_calls_end("<｜tool▁calls▁end｜>");
-    static const common_regex function_regex("<｜tool▁call▁begin｜>function<｜tool▁sep｜>([^\n]+)\n```json\n");
+    static const common_regex function_regex("(?:<｜tool▁call▁begin｜>)?function<｜tool▁sep｜>([^\n]+)\n```json\n");
     static const common_regex close_regex("```[\\s\\r\\n]*<｜tool▁call▁end｜>");
 
     parse_json_tool_calls(builder, tool_calls_begin, function_regex, close_regex, tool_calls_end);
