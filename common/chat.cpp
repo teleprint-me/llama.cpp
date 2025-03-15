@@ -904,7 +904,7 @@ static common_chat_params common_chat_params_init_command_r7b(const common_chat_
     });
     data.grammar_triggers.push_back({
         COMMON_GRAMMAR_TRIGGER_TYPE_PATTERN_FULL,
-        std::string(data.thinking_forced_open ? "[\\s\\S]*?<\\|END_THINKING\\|>" : "(?:<\\|START_THINKING\\|>[\\s\\S]*?<\\|END_THINKING\\|>)?") +
+        std::string(data.thinking_forced_open ? "[\\s\\S]*?(<\\|END_THINKING\\|>)" : "(?:<\\|START_THINKING\\|>[\\s\\S]*?(<\\|END_THINKING\\|>))?") +
             "\\s*(<\\|START_ACTION\\|>)[\\s\\S]*"
     });
     data.preserved_tokens = {
@@ -1147,7 +1147,7 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
                 " space");
             data.grammar_triggers.push_back({
                 COMMON_GRAMMAR_TRIGGER_TYPE_PATTERN_FULL,
-                std::string(data.thinking_forced_open ? "[\\s\\S]*?</think>" : "(?:<think>[\\s\\S]*?</think>)?") +
+                std::string(data.thinking_forced_open ? "[\\s\\S]*?(</think>)" : "(?:<think>[\\s\\S]*?(</think>))?") +
                     "\\s*(<｜tool▁calls▁begin｜>|<｜tool_calls_begin｜>|<｜tool calls begin｜>|<｜tool\\\\_calls\\\\_begin｜>|<｜tool▁calls｜>)[\\s\\S]*"
             });
             data.preserved_tokens = {
@@ -1435,7 +1435,7 @@ static common_chat_params common_chat_params_init_hermes_2_pro(const common_chat
         // Trigger on some common known "good bad" outputs (only from the start and with a json that's about a specific argument name to avoid false positives)
         data.grammar_triggers.push_back({
             COMMON_GRAMMAR_TRIGGER_TYPE_PATTERN_FULL,
-            std::string(data.thinking_forced_open ? "[\\s\\S]*?</think>" : "(?:<think>[\\s\\S]*?</think>)?") + (
+            std::string(data.thinking_forced_open ? "[\\s\\S]*?(</think>)" : "(?:<think>[\\s\\S]*?(</think>))?") + (
                 "\\s*(<tool_call>"
                 "|<function"
                 "|(?:```(?:json|xml)?\n\\s*)?(?:<function_call>|<tools>|<xml><json>|<response>)?\\s*\\{\\s*\""
