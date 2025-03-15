@@ -1311,7 +1311,7 @@ static void test_template_output_parsers() {
                 "```<｜tool▁call▁end｜><｜tool▁calls▁end｜>",
                 /* is_partial= */ false,
                 {COMMON_CHAT_FORMAT_DEEPSEEK_R1}));
-                
+
         assert_msg_equals(message_assist_call_thoughts,
             common_chat_parse(
                 "<think>I'm\nthinking</think>\n\n"
