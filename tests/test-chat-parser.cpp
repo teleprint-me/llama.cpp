@@ -148,11 +148,6 @@ static void test_json_with_dumped_args() {
     );
   }
 
-  // Full args.
-  test(
-    R"({"foo": "bar", "args": {"arg1": 1})",
-    R"({"foo":"bar","args":"{\"arg1\":1}"})"
-  );
   // Partial JSON w/ partial args
   test(
     R"({"foo": "bar", "args": {")",

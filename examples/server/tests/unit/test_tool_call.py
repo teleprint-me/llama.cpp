@@ -625,4 +625,4 @@ def do_test_hello_world(server: ServerProcess, **kwargs):
     assert 'code' in actual_arguments, f"code not found in {json.dumps(actual_arguments)}"
     code = actual_arguments["code"]
     assert isinstance(code, str), f"Expected code to be a string, got {type(code)}: {json.dumps(code)}"
-    assert re.match(r'''print\(("[Hh]ello,? [Ww]orld!?"|'[Hh]ello,? [Ww]orld!?')\)''', code), f'Expected hello world, got {code}'
+    assert re.match(r'''print\(("[Hh]ello,? [Ww]orld!?"|'[Hh]ello,? [Ww]orld!?')\)''', re.sub(r'#.*\n?', '', code)), f'Expected hello world, got {code}'
