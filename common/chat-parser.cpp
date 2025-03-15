@@ -141,6 +141,9 @@ void common_chat_msg_parser::consume_literal(const std::string & literal) {
 
 bool common_chat_msg_parser::try_parse_reasoning(const std::string & start_think, const std::string & end_think) {
     auto handle_reasoning = [&](const std::string & reasoning, bool closed) {
+        if (reasoning.empty()) {
+            return;
+        }
         if (syntax_.reasoning_in_content) {
             add_content(syntax_.reasoning_format == COMMON_REASONING_FORMAT_DEEPSEEK ? "<think>" : start_think);
             add_content(reasoning);
