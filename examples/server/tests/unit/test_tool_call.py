@@ -78,7 +78,7 @@ WEATHER_TOOL = {
   }
 }
 
-def do_test_completion_with_required_tool_tiny(server: ServerProcess, tool: dict, argument_key: str | None, n_predict, stream: CompletionMode, **kwargs):
+def do_test_completion_with_required_tool_tiny(server: ServerProcess, tool: dict, argument_key: str | None, n_predict, **kwargs):
     body = server.make_any_request("POST", "/v1/chat/completions", data={
         "max_tokens": n_predict,
         "messages": [
@@ -88,7 +88,6 @@ def do_test_completion_with_required_tool_tiny(server: ServerProcess, tool: dict
         "tool_choice": "required",
         "tools": [tool],
         "parallel_tool_calls": False,
-        "stream": stream == CompletionMode.STREAMED,
         **kwargs,
     })
     # assert res.status_code == 200, f"Expected status code 200, got {res.status_code}"
@@ -107,13 +106,14 @@ def do_test_completion_with_required_tool_tiny(server: ServerProcess, tool: dict
         assert argument_key in actual_arguments, f"tool arguments: {json.dumps(actual_arguments)}, expected: {argument_key}"
 
 
-@pytest.mark.parametrize("template_name,tool,argument_key,stream", [
-    ("google-gemma-2-2b-it",                          TEST_TOOL,            "success",  CompletionMode.NORMAL),
-    ("google-gemma-2-2b-it",                          TEST_TOOL,            "success",  CompletionMode.STREAMED),
-    ("meta-llama-Llama-3.3-70B-Instruct",             TEST_TOOL,            "success",  CompletionMode.NORMAL),
-    ("meta-llama-Llama-3.3-70B-Instruct",             TEST_TOOL,            "success",  CompletionMode.STREAMED),
-    ("meta-llama-Llama-3.3-70B-Instruct",             PYTHON_TOOL,          "code",     CompletionMode.NORMAL),
-    ("meta-llama-Llama-3.3-70B-Instruct",             PYTHON_TOOL,          "code",     CompletionMode.STREAMED),
+@pytest.mark.parametrize("stream", [CompletionMode.NORMAL, CompletionMode.STREAMED])
+@pytest.mark.parametrize("template_name,tool,argument_key", [
+    ("google-gemma-2-2b-it",                          TEST_TOOL,            "success"),
+    ("google-gemma-2-2b-it",                          TEST_TOOL,            "success"),
+    ("meta-llama-Llama-3.3-70B-Instruct",             TEST_TOOL,            "success"),
+    ("meta-llama-Llama-3.3-70B-Instruct",             TEST_TOOL,            "success"),
+    ("meta-llama-Llama-3.3-70B-Instruct",             PYTHON_TOOL,          "code"),
+    ("meta-llama-Llama-3.3-70B-Instruct",             PYTHON_TOOL,          "code"),
 ])
 def test_completion_with_required_tool_tiny_fast(template_name: str, tool: dict, argument_key: str | None, stream: CompletionMode):
     global server
@@ -123,45 +123,38 @@ def test_completion_with_required_tool_tiny_fast(template_name: str, tool: dict,
     server.n_predict = n_predict
     server.chat_template_file = f'../../../models/templates/{template_name}.jinja'
     server.start(timeout_seconds=TIMEOUT_SERVER_START)
-    do_test_completion_with_required_tool_tiny(server, tool, argument_key, n_predict, stream, temperature=0.0, top_k=1, top_p=1.0)
+    do_test_completion_with_required_tool_tiny(server, tool, argument_key, n_predict, stream=stream == CompletionMode.STREAMED, temperature=0.0, top_k=1, top_p=1.0)
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("template_name,tool,argument_key,stream", [
-    ("meta-llama-Llama-3.1-8B-Instruct",              TEST_TOOL,            "success", CompletionMode.NORMAL),
-    ("meta-llama-Llama-3.1-8B-Instruct",              PYTHON_TOOL,          "code",    CompletionMode.NORMAL),
-    ("meta-llama-Llama-3.1-8B-Instruct",              PYTHON_TOOL,          "code",    CompletionMode.STREAMED),
+@pytest.mark.parametrize("stream", [CompletionMode.NORMAL, CompletionMode.STREAMED])
+@pytest.mark.parametrize("template_name,tool,argument_key", [
+    ("meta-llama-Llama-3.1-8B-Instruct",              TEST_TOOL,            "success"),
+    ("meta-llama-Llama-3.1-8B-Instruct",              PYTHON_TOOL,          "code"),
 
-    ("meetkai-functionary-medium-v3.1",               TEST_TOOL,            "success", CompletionMode.NORMAL),
-    ("meetkai-functionary-medium-v3.1",               PYTHON_TOOL,          "code",    CompletionMode.NORMAL),
-    ("meetkai-functionary-medium-v3.1",               PYTHON_TOOL,          "code",    CompletionMode.STREAMED),
+    ("meetkai-functionary-medium-v3.1",               TEST_TOOL,            "success"),
+    ("meetkai-functionary-medium-v3.1",               PYTHON_TOOL,          "code"),
 
-    ("meetkai-functionary-medium-v3.2",               TEST_TOOL,            "success", CompletionMode.NORMAL),
+    ("meetkai-functionary-medium-v3.2",               TEST_TOOL,            "success"),
     # Functionary v3.2 format supports raw python content, which w/ a dummy stories model will never end on its own.
-    # ("meetkai-functionary-medium-v3.2",               PYTHON_TOOL,          "code",    CompletionMode.NORMAL),
-    # ("meetkai-functionary-medium-v3.2",               PYTHON_TOOL,          "code",    CompletionMode.STREAMED),
+    # ("meetkai-functionary-medium-v3.2",               PYTHON_TOOL,          "code"),
 
-    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", TEST_TOOL,            "success", CompletionMode.NORMAL),
-    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", PYTHON_TOOL,          "code",    CompletionMode.NORMAL),
-    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", PYTHON_TOOL,          "code",    CompletionMode.STREAMED),
+    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", TEST_TOOL,            "success"),
+    ("NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use", PYTHON_TOOL,          "code"),
 
-    ("meta-llama-Llama-3.2-3B-Instruct",              TEST_TOOL,            "success", CompletionMode.NORMAL),
-    ("meta-llama-Llama-3.2-3B-Instruct",              PYTHON_TOOL,          "code",    CompletionMode.NORMAL),
-    ("meta-llama-Llama-3.2-3B-Instruct",              PYTHON_TOOL,          "code",    CompletionMode.STREAMED),
+    ("meta-llama-Llama-3.2-3B-Instruct",              TEST_TOOL,            "success"),
+    ("meta-llama-Llama-3.2-3B-Instruct",              PYTHON_TOOL,          "code"),
 
-    ("mistralai-Mistral-Nemo-Instruct-2407",          TEST_TOOL,            "success", CompletionMode.NORMAL),
-    ("mistralai-Mistral-Nemo-Instruct-2407",          PYTHON_TOOL,          "code",    CompletionMode.NORMAL),
-    ("mistralai-Mistral-Nemo-Instruct-2407",          PYTHON_TOOL,          "code",    CompletionMode.STREAMED),
+    ("mistralai-Mistral-Nemo-Instruct-2407",          TEST_TOOL,            "success"),
+    ("mistralai-Mistral-Nemo-Instruct-2407",          PYTHON_TOOL,          "code"),
 
-    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   TEST_TOOL,            "success", CompletionMode.NORMAL),
-    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   PYTHON_TOOL,          "code",    CompletionMode.NORMAL),
-    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   PYTHON_TOOL,          "code",    CompletionMode.STREAMED),
+    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   TEST_TOOL,            "success"),
+    ("NousResearch-Hermes-3-Llama-3.1-8B-tool_use",   PYTHON_TOOL,          "code"),
 
-    ("deepseek-ai-DeepSeek-R1-Distill-Llama-8B",      TEST_TOOL,            "success", CompletionMode.NORMAL),
-    ("deepseek-ai-DeepSeek-R1-Distill-Llama-8B",      PYTHON_TOOL,          "code",    CompletionMode.NORMAL),
-    ("deepseek-ai-DeepSeek-R1-Distill-Llama-8B",      PYTHON_TOOL,          "code",    CompletionMode.STREAMED),
+    ("deepseek-ai-DeepSeek-R1-Distill-Llama-8B",      TEST_TOOL,            "success"),
+    ("deepseek-ai-DeepSeek-R1-Distill-Llama-8B",      PYTHON_TOOL,          "code"),
 
-    ("fireworks-ai-llama-3-firefunction-v2",          TEST_TOOL,            "success", CompletionMode.NORMAL),
+    ("fireworks-ai-llama-3-firefunction-v2",          TEST_TOOL,            "success"),
     # ("fireworks-ai-llama-3-firefunction-v2",          PYTHON_TOOL,          "codeFalse), True),
     # ("fireworks-ai-llama-3-firefunction-v2",          PYTHON_TOOL,          "code"),
 
@@ -174,10 +167,11 @@ def test_completion_with_required_tool_tiny_slow(template_name: str, tool: dict,
     server.n_predict = n_predict
     server.chat_template_file = f'../../../models/templates/{template_name}.jinja'
     server.start(timeout_seconds=TIMEOUT_SERVER_START)
-    do_test_completion_with_required_tool_tiny(server, tool, argument_key, n_predict, stream)
+    do_test_completion_with_required_tool_tiny(server, tool, argument_key, n_predict, stream=stream == CompletionMode.STREAMED)
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("stream", [CompletionMode.NORMAL, CompletionMode.STREAMED])
 @pytest.mark.parametrize("tool,argument_key,hf_repo,template_override", [
     (TEST_TOOL,    "success",  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
     (PYTHON_TOOL,  "code",     "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
@@ -230,7 +224,7 @@ def test_completion_with_required_tool_tiny_slow(template_name: str, tool: dict,
     (TEST_TOOL,    "success",  "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
     (PYTHON_TOOL,  "code",     "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
 ])
-def test_completion_with_required_tool_real_model(tool: dict, argument_key: str | None, hf_repo: str, template_override: str | Tuple[str, str | None] | None):
+def test_completion_with_required_tool_real_model(tool: dict, argument_key: str | None, hf_repo: str, template_override: str | Tuple[str, str | None] | None, stream: CompletionMode):
     global server
     n_predict = 512
     server.jinja = True
@@ -245,7 +239,7 @@ def test_completion_with_required_tool_real_model(tool: dict, argument_key: str 
     elif isinstance(template_override, str):
         server.chat_template = template_override
     server.start(timeout_seconds=TIMEOUT_SERVER_START)
-    res = server.make_request("POST", "/v1/chat/completions", data={
+    body = server.make_any_request("POST", "/v1/chat/completions", data={
         "max_tokens": n_predict,
         "messages": [
             {"role": "system", "content": "You are a coding assistant."},
@@ -254,12 +248,12 @@ def test_completion_with_required_tool_real_model(tool: dict, argument_key: str 
         "tool_choice": "required",
         "tools": [tool],
         "parallel_tool_calls": False,
+        "stream": stream == CompletionMode.STREAMED,
         "temperature": 0.0,
         "top_k": 1,
         "top_p": 1.0,
     }, timeout=TIMEOUT_HTTP_REQUEST)
-    assert res.status_code == 200, f"Expected status code 200, got {res.status_code}"
-    choice = res.body["choices"][0]
+    choice = body["choices"][0]
     tool_calls = choice["message"].get("tool_calls")
     assert tool_calls and len(tool_calls) == 1, f'Expected 1 tool call in {choice["message"]}'
     tool_call = tool_calls[0]
@@ -274,7 +268,7 @@ def test_completion_with_required_tool_real_model(tool: dict, argument_key: str 
 
 
 def do_test_completion_without_tool_call(server: ServerProcess, n_predict: int, tools: list[dict], tool_choice: str | None, **kwargs):
-    res = server.make_request("POST", "/v1/chat/completions", data={
+    body = server.make_any_request("POST", "/v1/chat/completions", data={
         "max_tokens": n_predict,
         "messages": [
             {"role": "system", "content": "You are a coding assistant."},
@@ -284,26 +278,27 @@ def do_test_completion_without_tool_call(server: ServerProcess, n_predict: int, 
         "tool_choice": tool_choice,
         **kwargs,
     }, timeout=TIMEOUT_HTTP_REQUEST)
-    assert res.status_code == 200, f"Expected status code 200, got {res.status_code}"
-    choice = res.body["choices"][0]
+    choice = body["choices"][0]
     assert choice["message"].get("tool_calls") is None, f'Expected no tool call in {choice["message"]}'
 
 
+@pytest.mark.parametrize("stream", [CompletionMode.NORMAL, CompletionMode.STREAMED])
 @pytest.mark.parametrize("template_name,n_predict,tools,tool_choice", [
     ("meta-llama-Llama-3.3-70B-Instruct",         128, [],            None),
     ("meta-llama-Llama-3.3-70B-Instruct",         128, [TEST_TOOL],   None),
     ("meta-llama-Llama-3.3-70B-Instruct",         128, [PYTHON_TOOL], 'none'),
 ])
-def test_completion_without_tool_call_fast(template_name: str, n_predict: int, tools: list[dict], tool_choice: str | None):
+def test_completion_without_tool_call_fast(template_name: str, n_predict: int, tools: list[dict], tool_choice: str | None, stream: CompletionMode):
     global server
     server.n_predict = n_predict
     server.jinja = True
     server.chat_template_file = f'../../../models/templates/{template_name}.jinja'
     server.start(timeout_seconds=TIMEOUT_SERVER_START)
-    do_test_completion_without_tool_call(server, n_predict, tools, tool_choice)
+    do_test_completion_without_tool_call(server, n_predict, tools, tool_choice, stream=stream == CompletionMode.STREAMED)
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("stream", [CompletionMode.NORMAL, CompletionMode.STREAMED])
 @pytest.mark.parametrize("template_name,n_predict,tools,tool_choice", [
     ("meetkai-functionary-medium-v3.2",               256, [],            None),
     ("meetkai-functionary-medium-v3.2",               256, [TEST_TOOL],   None),
@@ -315,16 +310,17 @@ def test_completion_without_tool_call_fast(template_name: str, n_predict: int, t
     ("meta-llama-Llama-3.2-3B-Instruct",              256, [TEST_TOOL],   None),
     ("meta-llama-Llama-3.2-3B-Instruct",              256, [PYTHON_TOOL], 'none'),
 ])
-def test_completion_without_tool_call_slow(template_name: str, n_predict: int, tools: list[dict], tool_choice: str | None):
+def test_completion_without_tool_call_slow(template_name: str, n_predict: int, tools: list[dict], tool_choice: str | None, stream: CompletionMode):
     global server
     server.n_predict = n_predict
     server.jinja = True
     server.chat_template_file = f'../../../models/templates/{template_name}.jinja'
     server.start(timeout_seconds=TIMEOUT_SERVER_START)
-    do_test_completion_without_tool_call(server, n_predict, tools, tool_choice)
+    do_test_completion_without_tool_call(server, n_predict, tools, tool_choice, stream=stream == CompletionMode.STREAMED)
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("stream", [CompletionMode.NORMAL, CompletionMode.STREAMED])
 @pytest.mark.parametrize("hf_repo,template_override", [
     ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", None),
     ("bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M", "chatml"),
@@ -365,7 +361,7 @@ def test_completion_without_tool_call_slow(template_name: str, n_predict: int, t
 
     # ("bartowski/Llama-3.2-1B-Instruct-GGUF:Q4_K_M", ("meta-llama/Llama-3.2-3B-Instruct", None)),
 ])
-def test_weather(hf_repo: str, template_override: str | Tuple[str, str | None] | None):
+def test_weather(hf_repo: str, template_override: str | Tuple[str, str | None] | None, stream: CompletionMode):
     global server
     n_predict = 512
     server.jinja = True
@@ -380,11 +376,11 @@ def test_weather(hf_repo: str, template_override: str | Tuple[str, str | None] |
     elif isinstance(template_override, str):
         server.chat_template = template_override
     server.start(timeout_seconds=TIMEOUT_SERVER_START)
-    do_test_weather(server, max_tokens=n_predict)
+    do_test_weather(server, stream=stream == CompletionMode.STREAMED, max_tokens=n_predict)
 
 
 def do_test_weather(server: ServerProcess, **kwargs):
-    res = server.make_request("POST", "/v1/chat/completions", data={
+    body = server.make_any_request("POST", "/v1/chat/completions", data={
         "messages": [
             {"role": "system", "content": "You are a chatbot that uses tools/functions. Dont overthink things."},
             {"role": "user", "content": "What is the weather in Istanbul?"},
@@ -392,8 +388,7 @@ def do_test_weather(server: ServerProcess, **kwargs):
         "tools": [WEATHER_TOOL],
         **kwargs,
     }, timeout=TIMEOUT_HTTP_REQUEST)
-    assert res.status_code == 200, f"Expected status code 200, got {res.status_code}"
-    choice = res.body["choices"][0]
+    choice = body["choices"][0]
     tool_calls = choice["message"].get("tool_calls")
     assert tool_calls and len(tool_calls) == 1, f'Expected 1 tool call in {choice["message"]}'
     tool_call = tool_calls[0]
@@ -408,6 +403,7 @@ def do_test_weather(server: ServerProcess, **kwargs):
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("stream", [CompletionMode.NORMAL, CompletionMode.STREAMED])
 @pytest.mark.parametrize("result_override,n_predict,hf_repo,template_override", [
     (None,                                           128,  "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",       "chatml"),
     (None,                                           128,  "bartowski/Qwen2.5-Coder-3B-Instruct-GGUF:Q4_K_M", None),
@@ -425,7 +421,7 @@ def do_test_weather(server: ServerProcess, **kwargs):
     # (None,                                           128,  "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF:Q4_K_M",  None),
     # ("[\\s\\S]*?\\*\\*\\s*0.5($|\\*\\*)",            8192, "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
 ])
-def test_calc_result(result_override: str | None, n_predict: int, hf_repo: str, template_override: str | Tuple[str, str | None] | None):
+def test_calc_result(result_override: str | None, n_predict: int, hf_repo: str, template_override: str | Tuple[str, str | None] | None, stream: CompletionMode):
     global server
     server.jinja = True
     server.n_ctx = 8192 * 2
@@ -439,11 +435,11 @@ def test_calc_result(result_override: str | None, n_predict: int, hf_repo: str, 
     elif isinstance(template_override, str):
         server.chat_template = template_override
     server.start(timeout_seconds=TIMEOUT_SERVER_START)
-    do_test_calc_result(server, result_override, n_predict)
+    do_test_calc_result(server, result_override, n_predict, stream=stream)
 
 
 def do_test_calc_result(server: ServerProcess, result_override: str | None, n_predict: int, **kwargs):
-    res = server.make_request("POST", "/v1/chat/completions", data={
+    body = server.make_any_request("POST", "/v1/chat/completions", data={
         "max_tokens": n_predict,
         "messages": [
             {"role": "system", "content": "You are a tools-calling assistant. You express numerical values with at most two decimals."},
@@ -490,8 +486,7 @@ def do_test_calc_result(server: ServerProcess, result_override: str | None, n_pr
         ],
         **kwargs,
     }, timeout=TIMEOUT_HTTP_REQUEST)
-    assert res.status_code == 200, f"Expected status code 200, got {res.status_code}"
-    choice = res.body["choices"][0]
+    choice = body["choices"][0]
     tool_calls = choice["message"].get("tool_calls")
     assert tool_calls is None, f'Expected no tool call in {choice["message"]}'
     content = choice["message"].get("content")
@@ -552,6 +547,7 @@ def test_thoughts(n_predict: int, reasoning_format: Literal['deepseek', 'none'] 
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("stream", [CompletionMode.NORMAL, CompletionMode.STREAMED])
 @pytest.mark.parametrize("hf_repo,template_override", [
     ("bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
 
@@ -585,7 +581,7 @@ def test_thoughts(n_predict: int, reasoning_format: Literal['deepseek', 'none'] 
     ("bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              None),
     ("bartowski/gemma-2-2b-it-GGUF:Q4_K_M",              "chatml"),
 ])
-def test_hello_world(hf_repo: str, template_override: str | Tuple[str, str | None] | None):
+def test_hello_world(hf_repo: str, template_override: str | Tuple[str, str | None] | None, stream: CompletionMode):
     global server
     n_predict = 512 # High because of DeepSeek R1
     server.jinja = True
@@ -601,11 +597,11 @@ def test_hello_world(hf_repo: str, template_override: str | Tuple[str, str | Non
         server.chat_template = template_override
     server.start(timeout_seconds=TIMEOUT_SERVER_START)
 
-    do_test_hello_world(server, max_tokens=n_predict)
+    do_test_hello_world(server, stream=stream == CompletionMode.STREAMED, max_tokens=n_predict)
 
 
 def do_test_hello_world(server: ServerProcess, **kwargs):
-    res = server.make_request("POST", "/v1/chat/completions", data={
+    body = server.make_any_request("POST", "/v1/chat/completions", data={
         "messages": [
             {"role": "system", "content": "You are a tool-calling agent."},
             {"role": "user", "content": "say hello world with python"},
@@ -613,8 +609,7 @@ def do_test_hello_world(server: ServerProcess, **kwargs):
         "tools": [PYTHON_TOOL],
         **kwargs,
     }, timeout=TIMEOUT_HTTP_REQUEST)
-    assert res.status_code == 200, f"Expected status code 200, got {res.status_code}"
-    choice = res.body["choices"][0]
+    choice = body["choices"][0]
     tool_calls = choice["message"].get("tool_calls")
     assert tool_calls and len(tool_calls) == 1, f'Expected 1 tool call in {choice["message"]}'
     tool_call = tool_calls[0]

@@ -297,6 +297,7 @@ class ServerProcess:
         path: str,
         data: dict | None = None,
         headers: dict | None = None,
+        timeout: float | None = None,
     ) -> dict:
         stream = data.get('stream', False)
         if stream:
@@ -356,7 +357,7 @@ class ServerProcess:
             print("Final response from server", json.dumps(result, indent=2))
             return result
         else:
-            response = self.make_request(method, path, data, headers)
+            response = self.make_request(method, path, data, headers, timeout=timeout)
             assert response.status_code == 200, f"Server returned error: {response.status_code}"
             return response.body
 
