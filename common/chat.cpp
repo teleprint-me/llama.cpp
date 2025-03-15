@@ -899,13 +899,15 @@ static common_chat_params common_chat_params_init_command_r7b(const common_chat_
             schema["maxItems"] = 1;
         }
         builder.add_rule("root",
-            std::string(data.thinking_forced_open ? "\"<|END_THINKING|>\" space " : "") +
+            std::string(data.thinking_forced_open ? "( \"<|END_THINKING|>\" space )? " : "") +
             "\"<|START_ACTION|>\" " + builder.add_schema("tool_calls", schema) + " \"<|END_ACTION|>\"");
     });
     data.grammar_triggers.push_back({
         COMMON_GRAMMAR_TRIGGER_TYPE_PATTERN_FULL,
-        std::string(data.thinking_forced_open ? "[\\s\\S]*?(<\\|END_THINKING\\|>)" : "(?:<\\|START_THINKING\\|>[\\s\\S]*?(<\\|END_THINKING\\|>))?") +
-            "\\s*(<\\|START_ACTION\\|>)[\\s\\S]*"
+        // If thinking_forced_open, then we capture the </think> tag in the grammar,
+        // (important for required tool choice) and in the trigger's first capture (decides what is sent to the grammar)
+        std::string(data.thinking_forced_open ? "[\\s\\S]*?(<\\|END_THINKING\\|>\\s*)" : "(?:<\\|START_THINKING\\|>[\\s\\S]*?<\\|END_THINKING\\|>\\s*)?") +
+            "(<\\|START_ACTION\\|>)[\\s\\S]*"
     });
     data.preserved_tokens = {
         "<|START_ACTION|>",
@@ -1140,15 +1142,17 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
             // Distill Qwen 7B & 32B models seem confused re/ syntax of their tool call opening tag,
             // so we accept common variants (then it's all constrained)
             builder.add_rule("root",
-                std::string(data.thinking_forced_open ? "\"</think>\" space " : "") +
+                std::string(data.thinking_forced_open ? "( \"</think>\" space )? " : "") +
                 "( \"<｜tool▁calls▁begin｜>\" | \"<｜tool_calls_begin｜>\" | \"<｜tool calls begin｜>\" | \"<｜tool\\\\_calls\\\\_begin｜>\" | \"<｜tool▁calls｜>\" ) "
                 "(" + string_join(tool_rules, " | ") + ")" + (inputs.parallel_tool_calls ? "*" : "") + " "
                 "\"<｜tool▁calls▁end｜>\""
                 " space");
             data.grammar_triggers.push_back({
                 COMMON_GRAMMAR_TRIGGER_TYPE_PATTERN_FULL,
-                std::string(data.thinking_forced_open ? "[\\s\\S]*?(</think>)" : "(?:<think>[\\s\\S]*?(</think>))?") +
-                    "\\s*(<｜tool▁calls▁begin｜>|<｜tool_calls_begin｜>|<｜tool calls begin｜>|<｜tool\\\\_calls\\\\_begin｜>|<｜tool▁calls｜>)[\\s\\S]*"
+                // If thinking_forced_open, then we capture the </think> tag in the grammar,
+                // (important for required tool choice) and in the trigger's first capture (decides what is sent to the grammar)
+                std::string(data.thinking_forced_open ? "[\\s\\S]*?(</think>\\s*)" : "(?:<think>[\\s\\S]*?</think>\\s*)?") +
+                    "(<｜tool▁calls▁begin｜>|<｜tool_calls_begin｜>|<｜tool calls begin｜>|<｜tool\\\\_calls\\\\_begin｜>|<｜tool▁calls｜>)[\\s\\S]*"
             });
             data.preserved_tokens = {
                 "<think>",
@@ -1430,13 +1434,15 @@ static common_chat_params common_chat_params_init_hermes_2_pro(const common_chat
             "( \"```\\n\" | \"```json\\n\" | \"```xml\\n\" ) space " + wrappable_tool_call + " space \"```\" space ");
         auto tool_call = builder.add_rule("tool_call", string_join(tool_call_alts, " | "));
         builder.add_rule("root",
-            std::string(data.thinking_forced_open ? "\"</think>\" space " : "") +
+            std::string(data.thinking_forced_open ? "( \"</think>\" space )? " : "") +
             (inputs.parallel_tool_calls ? "(" + tool_call + ")+" : tool_call));
         // Trigger on some common known "good bad" outputs (only from the start and with a json that's about a specific argument name to avoid false positives)
         data.grammar_triggers.push_back({
             COMMON_GRAMMAR_TRIGGER_TYPE_PATTERN_FULL,
-            std::string(data.thinking_forced_open ? "[\\s\\S]*?(</think>)" : "(?:<think>[\\s\\S]*?(</think>))?") + (
-                "\\s*(<tool_call>"
+            // If thinking_forced_open, then we capture the </think> tag in the grammar,
+            // (important for required tool choice) and in the trigger's first capture (decides what is sent to the grammar)
+            std::string(data.thinking_forced_open ? "[\\s\\S]*?(</think>\\s*)" : "(?:<think>[\\s\\S]*?</think>\\s*)?") + (
+                "(<tool_call>"
                 "|<function"
                 "|(?:```(?:json|xml)?\n\\s*)?(?:<function_call>|<tools>|<xml><json>|<response>)?\\s*\\{\\s*\""
                 ")[\\s\\S]*"
@@ -1490,12 +1496,13 @@ static void common_chat_parse_hermes_2_pro(common_chat_msg_parser & builder) {
 
     auto start = builder.pos();
     if (auto res = builder.try_find_regex(open_regex)) {
-        if (res->groups[0].begin != start && res->groups[4].empty() && res->groups[5].empty()) {
-            // The only syntax we allow after the very start is <function=...> or <function name=...>
+        if (res->groups[0].begin != start && builder.str(res->groups[2]) != "<tool_call>" &&  res->groups[4].empty() && res->groups[5].empty()) {
+            // The only syntaxes we allow after the very start are <tool_call>, <function=...> or <function name=...>
+            builder.move_to(start);
             builder.add_content(builder.consume_rest());
             return;
         }
-        GGML_ASSERT(res->prelude.empty()); // matching at_start
+        builder.add_content(res->prelude);
 
         const auto & block_start = res->groups[1];
         std::string block_end = block_start.empty() ? "" : "```";

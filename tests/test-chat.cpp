@@ -327,7 +327,17 @@ static void test_templates(const struct common_chat_templates * tmpls, const std
                     {
                         const auto & pattern = trigger.value;
                         if (std::regex_match(constrained, match, std::regex(pattern))) {
-                            pos = match.position(1);
+                            auto mpos = std::string::npos;
+                            for (size_t i = 1; i < match.size(); ++i) {
+                                if (match[i].length() > 0) {
+                                    mpos = match.position(i);
+                                    break;
+                                }
+                            }
+                            if (mpos == std::string::npos) {
+                                mpos = match.position(0);
+                            }
+                            pos = mpos;
                         }
                         break;
                     }
@@ -463,6 +473,15 @@ const common_chat_msg message_assist_empty {
 const common_chat_msg message_assist_call {
     "assistant",
     "",
+    /* .content_parts = */ {},
+    tool_calls,
+    /* .reasoning_content = */ "",
+    /* .tool_name = */ "",
+    /* .tool_call_id = */ "",
+};
+const common_chat_msg message_assist_call_content {
+    "assistant",
+    "Hello, world!\nWhat's up?",
     /* .content_parts = */ {},
     tool_calls,
     /* .reasoning_content = */ "",
@@ -722,8 +741,11 @@ static void test_template_output_parsers() {
         auto tmpls = read_templates("models/templates/CohereForAI-c4ai-command-r7b-12-2024-tool_use.jinja");
         std::vector<std::string>   end_tokens{ "<|END_OF_TURN_TOKEN|>" };
 
-        assert_equals(COMMON_CHAT_FORMAT_COMMAND_R7B,                   common_chat_templates_apply(tmpls.get(), inputs_no_tools).format);
-        assert_equals(COMMON_CHAT_FORMAT_COMMAND_R7B,                   common_chat_templates_apply(tmpls.get(), inputs_tools).format);
+        for (const auto & inputs : { inputs_no_tools, inputs_tools }) {
+            auto params = common_chat_templates_apply(tmpls.get(), inputs);
+            assert_equals(COMMON_CHAT_FORMAT_COMMAND_R7B, params.format);
+            assert_equals(false, params.thinking_forced_open);
+        }
 
         assert_msg_equals(message_assist,
             common_chat_parse(
@@ -878,10 +900,24 @@ static void test_template_output_parsers() {
             "[TOOL_CALLS][{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}, \"id\": \"123456789\"}]");
     }
     {
+        auto tmpls = read_templates("models/templates/Qwen-QwQ-32B.jinja");
+        std::vector<std::string> end_tokens{ "<|im_end|>" };
+
+        for (const auto & inputs : { inputs_no_tools, inputs_tools }) {
+            auto params = common_chat_templates_apply(tmpls.get(), inputs);
+            assert_equals(COMMON_CHAT_FORMAT_HERMES_2_PRO, params.format);
+            assert_equals(true, params.thinking_forced_open);
+        }
+    }
+    {
         auto tmpls = read_templates("models/templates/NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja");
         std::vector<std::string> end_tokens{ "<|im_end|>" };
 
-        assert_equals(COMMON_CHAT_FORMAT_HERMES_2_PRO, common_chat_templates_apply(tmpls.get(), inputs_tools).format);
+        for (const auto & inputs : { inputs_no_tools, inputs_tools }) {
+            auto params = common_chat_templates_apply(tmpls.get(), inputs);
+            assert_equals(COMMON_CHAT_FORMAT_HERMES_2_PRO, params.format);
+            assert_equals(false, params.thinking_forced_open);
+        }
         assert_equals(
             COMMON_CHAT_FORMAT_HERMES_2_PRO,
             common_chat_templates_apply(
@@ -933,6 +969,13 @@ static void test_template_output_parsers() {
             message_assist_call,
             common_chat_parse(
                 "<tool_call>\n"
+                "{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
+                "</tool_call>",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
+        assert_msg_equals(message_assist_call_content,
+            common_chat_parse(
+                "Hello, world!\nWhat's up?<tool_call>\n"
                 "{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}\n"
                 "</tool_call>",
                 /* is_partial= */ false,
@@ -1066,6 +1109,27 @@ static void test_template_output_parsers() {
                 /* is_partial= */ false,
                 {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
 
+        assert_msg_equals(
+            {
+                /* .role = */ "assistant",
+                "This is not a tool call:\n"
+                "{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}",
+                /* .content_parts = */ {},
+                /* .tool_calls = */ {},
+                /* .reasoning_content = */ "",
+                /* .tool_name = */ "",
+                /* .tool_call_id = */ "",
+            },
+            common_chat_parse(
+                "This is not a tool call:\n"
+                "{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
+        assert_msg_equals(message_assist,
+            common_chat_parse(
+                "Hello, world!\nWhat's up?",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
         assert_msg_equals(message_assist_thoughts_unparsed_deepseek,
             common_chat_parse(
                 "<think>I'm thinking</think>Hello, world!\nWhat's up?",
@@ -1162,7 +1226,7 @@ static void test_template_output_parsers() {
                     is_partial,
                     {COMMON_CHAT_FORMAT_FUNCTIONARY_V3_1_LLAMA_3_1}));
         }
-            
+
         test_templates(tmpls.get(), end_tokens, message_assist, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
         test_templates(tmpls.get(), end_tokens, message_assist_call, tools,
                       "<function=special_function>{\"arg1\": 1}</function>");
@@ -1243,7 +1307,11 @@ static void test_template_output_parsers() {
         auto tmpls = read_templates("models/templates/deepseek-ai-DeepSeek-R1-Distill-Llama-8B.jinja");
         std::vector<std::string>   end_tokens{ "<｜end▁of▁sentence｜>" };
 
-        assert_equals(COMMON_CHAT_FORMAT_DEEPSEEK_R1,                   common_chat_templates_apply(tmpls.get(), inputs_tools).format);
+        for (const auto & inputs : { inputs_no_tools, inputs_tools }) {
+            auto params = common_chat_templates_apply(tmpls.get(), inputs);
+            assert_equals(COMMON_CHAT_FORMAT_DEEPSEEK_R1, params.format);
+            assert_equals(true, params.thinking_forced_open);
+        }
 
         test_templates(tmpls.get(), end_tokens, message_assist, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
         test_templates(tmpls.get(), end_tokens, message_assist_thoughts, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);

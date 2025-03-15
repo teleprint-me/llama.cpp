@@ -1180,7 +1180,7 @@ void llama_grammar_accept_impl(struct llama_grammar & grammar, llama_token token
                     // get from the first matched capturing group to the end of the string
                     size_t start = std::string::npos;
                     for (auto i = 1u; i < match.size(); i++) {
-                        if (!match.str(i).empty()) {
+                        if (match.length(i) > 0) {
                             start = match.position(i);
                             break;
                         }
