@@ -739,8 +739,6 @@ struct server_task_result_cmpl_final : server_task_result {
         }
         if (stop == STOP_TYPE_WORD || stop == STOP_TYPE_EOS) {
             finish_reason = msg.tool_calls.empty() ? "stop" : "tool_calls";
-        } else {
-            msg.content = content;
         }
 
         json choice {
