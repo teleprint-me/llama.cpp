@@ -599,7 +599,7 @@ static void parse_json_tool_calls(
                 if (builder.input()[builder.pos()] == '{' || !maybe_raw_python) {
                     if (auto arguments = builder.try_consume_json_with_dumped_args({{}})) {
                         if (!builder.add_tool_call(name, "", arguments->value) || arguments->is_partial) {
-                            builder.incomplete("incomplete tool call");
+                            throw common_chat_msg_partial_exception("incomplete tool call");
                         }
                         builder.consume_regex(close_regex);
                     }
@@ -608,11 +608,11 @@ static void parse_json_tool_calls(
                 if (maybe_raw_python) {
                     auto arguments = wrap_code_as_arguments(builder, builder.consume_rest());
                     if (!builder.add_tool_call(name, "", arguments)) {
-                        builder.incomplete("incomplete tool call");
+                        throw common_chat_msg_partial_exception("incomplete tool call");
                     }
                     return;
                 }
-                builder.incomplete("incomplete tool call");
+                throw common_chat_msg_partial_exception("incomplete tool call");
             }
             break;
         }
@@ -641,7 +641,7 @@ static void parse_prefixed_json_tool_call_array(common_chat_msg_parser & builder
         builder.move_back(rstrip_prefix);
         auto tool_calls = builder.consume_json_with_dumped_args(args_paths);
         if (!builder.add_tool_calls(tool_calls.value) || tool_calls.is_partial) {
-            builder.incomplete("incomplete tool call array");
+            throw common_chat_msg_partial_exception("incomplete tool call array");
         }
     } else {
         builder.add_content(builder.consume_rest());
@@ -780,20 +780,20 @@ static void common_chat_parse_generic(common_chat_msg_parser & builder) {
     auto data = builder.consume_json_with_dumped_args(args_paths);
     if (data.value.contains("tool_calls")) {
         if (!builder.add_tool_calls(data.value.at("tool_calls")) || data.is_partial) {
-            builder.incomplete("incomplete tool calls");
+            throw common_chat_msg_partial_exception("incomplete tool calls");
         }
     } else if (data.value.contains("tool_call")) {
         if (!builder.add_tool_call(data.value.at("tool_call")) || data.is_partial) {
-            builder.incomplete("incomplete tool call");
+            throw common_chat_msg_partial_exception("incomplete tool call");
         }
     } else if (data.value.contains("response")) {
         const auto & response = data.value.at("response");
         builder.add_content(response.is_string() ? response.template get<std::string>() : response.dump(2));
         if (data.is_partial) {
-            builder.incomplete("incomplete response");
+            throw common_chat_msg_partial_exception("incomplete response");
         }
     } else {
-        builder.incomplete("Expected 'tool_call', 'tool_calls' or 'response' in JSON");
+        throw common_chat_msg_partial_exception("Expected 'tool_call', 'tool_calls' or 'response' in JSON");
     }
 }
 
@@ -937,11 +937,11 @@ static void common_chat_parse_command_r7b(common_chat_msg_parser & builder) {
             std::string id = tool_call.contains("tool_call_id") ? tool_call.at("tool_call_id") : "";
             std::string arguments = tool_call.contains("parameters") ? tool_call.at("parameters") : "";
             if (!builder.add_tool_call(name, id, arguments) || tool_calls.is_partial) {
-                builder.incomplete("incomplete tool call");
+                throw common_chat_msg_partial_exception("incomplete tool call");
             }
         }
         if (tool_calls.is_partial) {
-            builder.incomplete("incomplete tool call");
+            throw common_chat_msg_partial_exception("incomplete tool call");
         }
         builder.consume_regex(end_action_regex);
     } else if (auto res = builder.try_find_regex(start_response_regex)) {
@@ -951,7 +951,7 @@ static void common_chat_parse_command_r7b(common_chat_msg_parser & builder) {
             builder.add_content(res->prelude);
         } else {
             builder.add_content(builder.consume_rest());
-            builder.incomplete("Expected end of response tag " + end_response_regex.str());
+            throw common_chat_msg_partial_exception(end_response_regex.str());
         }
     } else {
         builder.add_content(builder.consume_rest());
@@ -1089,7 +1089,7 @@ static void common_chat_parse_llama_3_1(common_chat_msg_parser & builder, bool w
 
             auto arguments = args.dump();
             if (!builder.add_tool_call(function_name, "", arguments)) {
-                builder.incomplete("Incomplete tool call");
+                throw common_chat_msg_partial_exception("Incomplete tool call");
             }
             return;
         }
@@ -1516,7 +1516,7 @@ static void common_chat_parse_hermes_2_pro(common_chat_msg_parser & builder) {
 
             if (auto tool_call = builder.try_consume_json_with_dumped_args({{"arguments"}})) {
                 if (!builder.add_tool_call(tool_call->value) || tool_call->is_partial) {
-                    builder.incomplete("incomplete tool call");
+                    throw common_chat_msg_partial_exception("incomplete tool call");
                 }
                 builder.consume_spaces();
                 builder.consume_literal(close_tag);
@@ -1527,7 +1527,7 @@ static void common_chat_parse_hermes_2_pro(common_chat_msg_parser & builder) {
                 }
                 builder.add_content(builder.consume_rest());
             } else {
-                builder.incomplete("failed to parse tool call");
+                throw common_chat_msg_partial_exception("failed to parse tool call");
             }
         } else {
             auto function_name = builder.str(res->groups[4]);
@@ -1540,7 +1540,7 @@ static void common_chat_parse_hermes_2_pro(common_chat_msg_parser & builder) {
 
             if (auto arguments = builder.try_consume_json_with_dumped_args({{}})) {
                 if (!builder.add_tool_call(function_name, "", arguments->value) || arguments->is_partial) {
-                    builder.incomplete("incomplete tool call");
+                    throw common_chat_msg_partial_exception("incomplete tool call");
                 }
                 builder.consume_spaces();
                 builder.consume_literal(close_tag);
@@ -1792,22 +1792,5 @@ common_chat_msg common_chat_parse(const std::string & input, bool is_partial, co
     }
     auto msg = builder.result();
     LOG_DBG("Parsed message: %s\n", common_chat_msgs_to_json_oaicompat<json>({msg}).at(0).dump().c_str());
-    // switch (syntax.reasoning_format) {
-    //     case COMMON_REASONING_FORMAT_DEEPSEEK:
-    //         if (!msg.reasoning_content.empty() && syntax.reasoning_in_content) {
-    //             std::string content = "<think>" + msg.reasoning_content;
-    //             if (!is_partial || !msg.content.empty()) {
-    //                 content += "</think>";
-    //             }
-    //             content += msg.content;
-    //             msg.content = content;
-    //             msg.reasoning_content.clear();
-    //         }
-    //         break;
-    //     case COMMON_REASONING_FORMAT_NONE:
-    //         break;
-    //     default:
-    //         throw std::runtime_error("Unsupported reasoning format");
-    // }
     return msg;
 }

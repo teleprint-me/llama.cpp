@@ -72,11 +72,6 @@ void common_chat_msg_parser::finish() {
     }
 }
 
-[[noreturn]]
-void common_chat_msg_parser::incomplete(const std::string & message) {
-    throw common_chat_msg_partial_exception(message);
-}
-
 bool common_chat_msg_parser::consume_spaces() {
     const auto length = input_.size();
     auto consumed = false;
@@ -128,7 +123,7 @@ std::optional<common_chat_msg_parser::find_regex_result>  common_chat_msg_parser
 
 void common_chat_msg_parser::consume_literal(const std::string & literal) {
     if (!try_consume_literal(literal)) {
-        incomplete(literal);
+        throw common_chat_msg_partial_exception(literal);
     }
 }
 
@@ -159,7 +154,7 @@ bool common_chat_msg_parser::try_parse_reasoning(const std::string & start_think
                 handle_reasoning(consume_rest(), /* closed */ !is_partial());
             }
             if (!syntax_.thinking_forced_open) {
-                incomplete(end_think);
+                throw common_chat_msg_partial_exception(end_think);
             }
             return true;
         } else {
@@ -188,7 +183,7 @@ std::optional<common_chat_msg_parser::find_regex_result> common_chat_msg_parser:
     }
     if (m.type == COMMON_REGEX_MATCH_TYPE_PARTIAL) {
         if (is_partial()) {
-            incomplete(regex.str());
+            throw common_chat_msg_partial_exception(regex.str());
         }
         return std::nullopt;
     }
@@ -202,7 +197,7 @@ common_chat_msg_parser::consume_regex_result common_chat_msg_parser::consume_reg
     if (auto result = try_consume_regex(regex)) {
         return *result;
     }
-    incomplete(regex.str());
+    throw common_chat_msg_partial_exception(regex.str());
 }
 
 std::optional<common_chat_msg_parser::consume_regex_result> common_chat_msg_parser::try_consume_regex(const common_regex & regex) {
@@ -212,7 +207,7 @@ std::optional<common_chat_msg_parser::consume_regex_result> common_chat_msg_pars
     }
     if (m.type == COMMON_REGEX_MATCH_TYPE_PARTIAL) {
         if (is_partial()) {
-            incomplete(regex.str());
+            throw common_chat_msg_partial_exception(regex.str());
         }
         return std::nullopt;
     }
@@ -238,7 +233,7 @@ std::optional<common_json> common_chat_msg_parser::try_consume_json() {
         return result;
     }
     if (!is_partial()) {
-        incomplete("JSON");
+        throw common_chat_msg_partial_exception("JSON");
     }
     return result;
 }
@@ -247,7 +242,7 @@ common_json common_chat_msg_parser::consume_json() {
     if (auto result = try_consume_json()) {
         return *result;
     }
-    incomplete("JSON");
+    throw common_chat_msg_partial_exception("JSON");
 }
 
 common_chat_msg_parser::consume_json_result common_chat_msg_parser::consume_json_with_dumped_args(
@@ -256,7 +251,7 @@ common_chat_msg_parser::consume_json_result common_chat_msg_parser::consume_json
     if (auto result = try_consume_json_with_dumped_args(args_paths)) {
         return *result;
     }
-    incomplete("JSON");
+    throw common_chat_msg_partial_exception("JSON");
 }
 
 std::optional<common_chat_msg_parser::consume_json_result> common_chat_msg_parser::try_consume_json_with_dumped_args(

@@ -300,8 +300,6 @@ static void test_positions() {
     builder.move_to(0);
     assert_equals<size_t>(0, builder.pos());
 
-    assert_throws([&]() { builder.incomplete("whatevs"); }, "^whatevs$");
-
     assert_throws([&]() { builder.finish(); });
     assert_equals<size_t>(0, builder.pos());
 
@@ -310,9 +308,6 @@ static void test_positions() {
   }
   {
     common_chat_msg_parser builder("Hello, world!", /* is_partial= */ true, {});
-
-    assert_throws([&]() { builder.incomplete("whatevs"); }, "whatevs$");
-    assert_equals<size_t>(0, builder.pos());
 
     builder.move_to(builder.input().size());
     assert_equals<size_t>(builder.input().size(), builder.pos());

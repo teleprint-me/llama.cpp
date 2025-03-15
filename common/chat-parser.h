@@ -64,9 +64,6 @@ class common_chat_msg_parser {
 
     void finish();
 
-    [[noreturn]]
-    void incomplete(const std::string & message);
-
     bool consume_spaces();
 
     void consume_literal(const std::string & literal);
