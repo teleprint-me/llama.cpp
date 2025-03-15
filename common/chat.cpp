@@ -1469,8 +1469,8 @@ static void common_chat_parse_hermes_2_pro(common_chat_msg_parser & builder) {
     static const common_regex open_regex(
         "(?:"
             "(```(?:xml|json)?\\n\\s*)?" // match 1 (block_start)
-            "("                          // match 2 (open_tag)  
-                "<tool_call>"                   
+            "("                          // match 2 (open_tag)
+                "<tool_call>"
                 "|<function_call>"
                 "|<tool>"
                 "|<tools>"
