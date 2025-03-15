@@ -42,6 +42,18 @@ struct common_chat_msg {
     bool empty() const {
         return content.empty() && content_parts.empty() && tool_calls.empty() && reasoning_content.empty() && tool_name.empty() && tool_call_id.empty();
     }
+    void ensure_tool_call_ids_set(std::vector<std::string> & ids_cache, const std::function<std::string()> & gen_tool_call_id) {
+        for (auto i = 0u; i < tool_calls.size(); i++) {
+            if (ids_cache.size() <= i) {
+                auto id = tool_calls[i].id;
+                if (id.empty()) {
+                    id = gen_tool_call_id();
+                }
+                ids_cache.push_back(id);
+            }
+            tool_calls[i].id = ids_cache[i];
+        }
+    }
     bool operator==(const common_chat_msg & other) const {
         return role == other.role
             && content == other.content

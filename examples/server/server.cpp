@@ -1282,6 +1282,7 @@ struct server_slot {
     llama_token sampled;
 
     common_chat_format chat_format = COMMON_CHAT_FORMAT_CONTENT_ONLY;
+    std::vector<std::string> generated_tool_call_ids;
 
     // stats
     size_t n_sent_text        = 0; // number of sent text character
@@ -1313,6 +1314,7 @@ struct server_slot {
         generated_token_probs.clear();
         generated_msg = {};
         json_schema = json();
+        generated_tool_call_ids.clear();
     }
 
     bool is_non_causal() const {
@@ -2356,13 +2358,11 @@ struct server_context {
             /* is_partial= */ true,
             slot.params.oaicompat_chat_syntax);
         if (!new_msg.empty()) {
+            new_msg.ensure_tool_call_ids_set(slot.generated_tool_call_ids, gen_tool_call_id);
             slot.generated_msg = new_msg;
         }
         res->oaicompat_previous_msg = previous_msg;
         res->oaicompat_new_msg      = new_msg.empty() ? previous_msg : new_msg;
-
-        // res->previous_content = slot.generated_text.substr(0, slot.generated_text.size() - tkn.text_to_send.size());
-        // res->oaicompat_chat_format = slot.params.oaicompat_chat_format;
 
         // populate res.probs_output
         if (slot.params.sampling.n_probs > 0) {
@@ -2409,6 +2409,7 @@ struct server_context {
             res->content,
             /* is_partial= */ slot.stop == STOP_TYPE_LIMIT,
             slot.params.oaicompat_chat_syntax);
+        res->oaicompat_msg.ensure_tool_call_ids_set(slot.generated_tool_call_ids, gen_tool_call_id);
         res->oaicompat_chat_syntax = slot.params.oaicompat_chat_syntax;
 
         // populate res.probs_output
