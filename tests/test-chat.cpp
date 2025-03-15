@@ -56,8 +56,28 @@ static std::ostream & operator<<(std::ostream & os, const common_chat_msg & msg)
     return os;
 }
 
+template <class T> static bool equals(const T & expected, const T & actual) {
+    return expected == actual;
+}
+
+static common_chat_msg normalize(const common_chat_msg & msg) {
+    common_chat_msg normalized = msg;
+    for (auto & tool_call : normalized.tool_calls) {
+        try {
+            tool_call.arguments = json::parse(tool_call.arguments).dump();
+        } catch (const std::exception &) {
+            // Do nothing
+        }
+    }
+    return normalized;
+}
+template <>
+bool equals(const common_chat_msg & expected, const common_chat_msg & actual) {
+    return normalize(expected) == normalize(actual);
+}
+
 template <class T> static void assert_equals(const T & expected, const T & actual) {
-    if (expected != actual) {
+    if (!equals(expected, actual)) {
         std::cerr << "Expected: " << expected << std::endl;
         std::cerr << "Actual: " << actual << std::endl;
         std::cerr << std::flush;
@@ -559,6 +579,7 @@ const common_chat_msg message_assist_call_code_interpreter {
 };
 
 static void test_msgs_oaicompat_json_conversion() {
+    printf("[%s]\n", __func__);
     std::vector<common_chat_msg> msgs{
         message_user,
         message_user_parts,
@@ -634,6 +655,7 @@ static void test_msgs_oaicompat_json_conversion() {
 }
 
 static void test_tools_oaicompat_json_conversion() {
+    printf("[%s]\n", __func__);
     std::vector<common_chat_tool> tools{
         special_function_tool,
         python_tool,
@@ -678,6 +700,7 @@ static void test_tools_oaicompat_json_conversion() {
 }
 
 static void test_template_output_parsers() {
+    printf("[%s]\n", __func__);
 
     common_chat_templates_inputs inputs_no_tools;
     inputs_no_tools.messages                = {message_user};
@@ -1131,6 +1154,15 @@ static void test_template_output_parsers() {
         assert_equals(COMMON_CHAT_FORMAT_FUNCTIONARY_V3_1_LLAMA_3_1,
                       common_chat_templates_apply(tmpls.get(), inputs_tools).format);
 
+        for (auto is_partial : { false, true }) {
+            assert_equals(
+                message_assist_call,
+                common_chat_parse(
+                    "<function=special_function>{\"arg1\": 1}</function>",
+                    is_partial,
+                    {COMMON_CHAT_FORMAT_FUNCTIONARY_V3_1_LLAMA_3_1}));
+        }
+            
         test_templates(tmpls.get(), end_tokens, message_assist, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
         test_templates(tmpls.get(), end_tokens, message_assist_call, tools,
                       "<function=special_function>{\"arg1\": 1}</function>");
@@ -1346,6 +1378,7 @@ static void test_template_output_parsers() {
 }
 
 static void test_msg_diffs_compute() {
+    printf("[%s]\n", __func__);
     {
         common_chat_msg msg1;
 
