@@ -810,11 +810,14 @@ static common_chat_params common_chat_params_init_generic(const common_chat_temp
     return data;
 }
 static void common_chat_parse_generic(common_chat_msg_parser & builder) {
+    static const std::vector<std::vector<std::string>> content_paths = {
+        {"response"},
+    };
     static const std::vector<std::vector<std::string>> args_paths = {
         {"tool_call", "arguments"},
         {"tool_calls", "arguments"},
     };
-    auto data = builder.consume_json_with_dumped_args(args_paths);
+    auto data = builder.consume_json_with_dumped_args(args_paths, content_paths);
     if (data.value.contains("tool_calls")) {
         if (!builder.add_tool_calls(data.value.at("tool_calls")) || data.is_partial) {
             throw common_chat_msg_partial_exception("incomplete tool calls");

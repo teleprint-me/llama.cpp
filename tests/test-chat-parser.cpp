@@ -165,16 +165,16 @@ const std::vector<std::string> barely_healable_jsons = {
   "{\"name\":\"python",
 };
 
-static void test(const std::string & input, bool is_partial, const std::vector<std::vector<std::string>> & args_paths, const std::string & expected) {
+static void test(const std::string & input, bool is_partial, const std::vector<std::vector<std::string>> & args_paths, const std::vector<std::vector<std::string>> & content_paths, const std::string & expected) {
   common_chat_msg_parser builder(input, is_partial, {});
-  auto js = builder.try_consume_json_with_dumped_args(args_paths);
+  auto js = builder.try_consume_json_with_dumped_args(args_paths, content_paths);
   assert_equals(true, js.has_value());
   assert_equals(is_partial, js->is_partial);
   assert_equals(expected, args_paths.size() == 1 && args_paths[0].empty() ? js->value.get<std::string>() : js->value.dump());
 }
 static void test_with_args(const std::string & input, const std::string & expected, bool parse_as_partial = true, bool is_partial = true) {
   common_chat_msg_parser builder(input, parse_as_partial, {});
-  auto js = builder.try_consume_json_with_dumped_args({{"args"}});
+  auto js = builder.try_consume_json_with_dumped_args({{"args"}}, {});
   assert_equals(true, js.has_value());
   assert_equals(is_partial, js->is_partial);
   assert_equals(expected, js->value.dump());
@@ -182,23 +182,29 @@ static void test_with_args(const std::string & input, const std::string & expect
 
 static void test_json_with_dumped_args_no_args() {
   // Normal JSON, nothing to heal, nothing to dump
-  test("{\"name\": \"python\"}", false, {}, "{\"name\":\"python\"}");
+  test("{\"name\": \"python\"}", false, {}, {}, "{\"name\":\"python\"}");
   // Full json is args
-  test("{\"name\": \"python\"}", false, {{}}, "{\"name\":\"python\"}");
+  test("{\"name\": \"python\"}", false, {{}}, {}, "{\"name\":\"python\"}");
 
   // If the arguments are further down, don't heal partial content.
   for (const auto & src : barely_healable_jsons) {
-    test(src, true, {{"arguments"}}, "{}");
+    test(src, true, {{"arguments"}}, {}, "{}");
   }
   // But heal content that isn't partial.
-  test("{\"name\": \"python\"", true, {{"arguments"}}, "{\"name\":\"python\"}");
+  test("{\"name\": \"python\"", true, {{"arguments"}}, {}, "{\"name\":\"python\"}");
 }
 
 static void test_json_with_dumped_args() {
+
+  // Partial content.
+  test("{\"content\": \"t", true, {}, {{"content"}}, "{\"content\":\"t\"}");
+  test("{\"content\": \"", true, {}, {{"content"}}, "{\"content\":\"\"}");
+  test("{\"content\": ", true, {}, {{"content"}}, "{}");
+
   // If the entire JSON is the arguments, healing it them dumping it produces the same output as the input (just reformatted).
-  test("{\"name\": \"python", true, {{}}, "{\"name\":\"python");
+  test("{\"name\": \"python", true, {{}}, {}, "{\"name\":\"python");
   for (const auto & src : barely_healable_jsons) {
-    test(src, true, {{}}, src);
+    test(src, true, {{}}, {}, src);
   }
 
   // Full JSON w/ args

@@ -242,16 +242,18 @@ common_json common_chat_msg_parser::consume_json() {
 }
 
 common_chat_msg_parser::consume_json_result common_chat_msg_parser::consume_json_with_dumped_args(
-    const std::vector<std::vector<std::string>> & args_paths
+    const std::vector<std::vector<std::string>> & args_paths,
+    const std::vector<std::vector<std::string>> & content_paths
 ) {
-    if (auto result = try_consume_json_with_dumped_args(args_paths)) {
+    if (auto result = try_consume_json_with_dumped_args(args_paths, content_paths)) {
         return *result;
     }
     throw common_chat_msg_partial_exception("JSON");
 }
 
 std::optional<common_chat_msg_parser::consume_json_result> common_chat_msg_parser::try_consume_json_with_dumped_args(
-    const std::vector<std::vector<std::string>> & args_paths
+    const std::vector<std::vector<std::string>> & args_paths,
+    const std::vector<std::vector<std::string>> & content_paths
 ) {
     auto partial = try_consume_json();
     if (!partial) {
@@ -259,6 +261,9 @@ std::optional<common_chat_msg_parser::consume_json_result> common_chat_msg_parse
     }
     auto is_arguments_path = [&](const std::vector<std::string> & path) {
         return std::find(args_paths.begin(), args_paths.end(), path) != args_paths.end();
+    };
+    auto is_content_path = [&](const std::vector<std::string> & path) {
+        return std::find(content_paths.begin(), content_paths.end(), path) != content_paths.end();
     };
 
     if (partial->healing_marker.marker.empty()) {
@@ -298,6 +303,18 @@ std::optional<common_chat_msg_parser::consume_json_result> common_chat_msg_parse
             }
             return arguments;
         }
+        if (is_content_path(path)) {
+            if (!j.is_string()) {
+                throw std::runtime_error("Content path must be a string");
+            }
+            std::string str = j;
+            auto idx = str.find(partial->healing_marker.marker); // not using json_dump_marker as we're inside a string
+            if (idx != std::string::npos) {
+                str.resize(idx);
+                found_healing_marker = true;
+            }
+            return str;
+        }
         if (j.is_object()) {
             auto obj = json::object();
             for (const auto & p : j.items()) {
@@ -314,6 +331,12 @@ std::optional<common_chat_msg_parser::consume_json_result> common_chat_msg_parse
                     const std::string value_str = value;
                     if (value_str.find(healing_marker_) != std::string::npos) {
                         found_healing_marker = true;
+                        if (is_content_path(path)) {
+                            if (partial->healing_marker.marker == partial->healing_marker.json_dump_marker) {
+                                // The healing occurred inside the string: good. Otherwise we just ditch the entire key/value pair.
+                                obj[key] = remove_unsupported_healings_and_dump_args(value);
+                            }
+                        }
                         break;
                     }
                     obj[key] = value;

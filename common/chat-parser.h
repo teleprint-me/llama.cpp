@@ -95,10 +95,22 @@ class common_chat_msg_parser {
         bool is_partial;
     };
 
+    /*
+        Consume (possibly partial) json and converts specific subtrees to (possibly truncated) JSON strings.
+
+        By default, object keys can't be truncated, nor can string values (their corresponding key is removed,
+        e.g. `{"foo": "bar", "baz": "b` -> `{"foo": "bar"}`
+
+        But one can allow subpaths to be kept truncated, and possibly json-dumped to truncated json strings
+        - with `content_paths={{"foo"}}` -> `{"foo": "b` -> {"foo": "b"}`
+        - with `args_paths={{"foo"}}` -> `{"foo": {"b` -> `{"foo": "{b"}`
+    */
     consume_json_result consume_json_with_dumped_args(
-        const std::vector<std::vector<std::string>> & args_paths = {}
+        const std::vector<std::vector<std::string>> & args_paths = {},
+        const std::vector<std::vector<std::string>> & content_paths = {}
     );
     std::optional<consume_json_result> try_consume_json_with_dumped_args(
-        const std::vector<std::vector<std::string>> & args_paths = {}
+        const std::vector<std::vector<std::string>> & args_paths = {},
+        const std::vector<std::vector<std::string>> & content_paths = {}
     );
 };
