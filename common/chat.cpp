@@ -1092,10 +1092,10 @@ static void common_chat_parse_llama_3_1(common_chat_msg_parser & builder, bool w
     static const common_regex function_regex(
         "\\s*\\{\\s*(?:\"type\"\\s*:\\s*\"function\"\\s*,\\s*)?\"name\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"parameters\"\\s*: ");
     static const common_regex close_regex("\\}\\s*");
-    
+
     static const common_regex function_name_regex("\\s*(\\w+)\\s*\\.\\s*call\\(");
     static const common_regex arg_name_regex("\\s*(\\w+)\\s*=\\s*");
-    
+
     if (with_builtin_tools) {
         static const common_regex builtin_call_regex("<\\|python_tag\\|>");
         if (auto res = builder.try_find_regex(builtin_call_regex)) {
