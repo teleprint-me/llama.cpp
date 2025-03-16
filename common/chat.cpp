@@ -1216,7 +1216,7 @@ static common_chat_params common_chat_params_init_deepseek_r1(const common_chat_
 static void common_chat_parse_deepseek_r1(common_chat_msg_parser & builder) {
     builder.try_parse_reasoning("<think>", "</think>");
 
-    static const common_regex tool_calls_begin("[\\s\\r\\n]*(?:<｜tool▁calls▁begin｜>|<｜tool_calls_begin｜>|<｜tool calls begin｜>|<｜tool\\\\_calls\\\\_begin｜>|<｜tool▁calls｜>)");
+    static const common_regex tool_calls_begin("(?:<｜tool▁calls▁begin｜>|<｜tool_calls_begin｜>|<｜tool calls begin｜>|<｜tool\\\\_calls\\\\_begin｜>|<｜tool▁calls｜>)");
     static const common_regex tool_calls_end("<｜tool▁calls▁end｜>");
     static const common_regex function_regex("(?:<｜tool▁call▁begin｜>)?function<｜tool▁sep｜>([^\n]+)\n```json\n");
     static const common_regex close_regex("```[\\s\\r\\n]*<｜tool▁call▁end｜>");
