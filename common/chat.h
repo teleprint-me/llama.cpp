@@ -193,3 +193,5 @@ template <class T> T common_chat_msgs_to_json_oaicompat(const std::vector<common
 // T can be std::string containing JSON or nlohmann::ordered_json
 template <class T> std::vector<common_chat_tool> common_chat_tools_parse_oaicompat(const T & tools);
 template <class T> T common_chat_tools_to_json_oaicompat(const std::vector<common_chat_tool> & tools);
+
+template <class T> T common_chat_msg_diff_to_json_oaicompat(const common_chat_msg_diff & diff);

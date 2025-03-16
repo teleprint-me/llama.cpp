@@ -364,6 +364,35 @@ json common_chat_tools_to_json_oaicompat(const std::vector<common_chat_tool> & t
     return result;
 }
 
+template <> json common_chat_msg_diff_to_json_oaicompat(const common_chat_msg_diff & diff) {
+    json delta = json::object();
+    // if (!diff.reasoning_content_delta.empty()) {
+    //     delta["reasoning_content"] = msg.reasoning_content;
+    // }
+    if (!diff.content_delta.empty()) {
+        delta["content"] = diff.content_delta;
+    }
+    if (diff.tool_call_index != std::string::npos) {
+        json function = json::object();
+        if (!diff.tool_call_delta.name.empty()) {
+            function["name"] = diff.tool_call_delta.name;
+        }
+        if (!diff.tool_call_delta.id.empty()) {
+            function["id"] = diff.tool_call_delta.id;
+        }
+        if (!diff.tool_call_delta.arguments.empty()) {
+            function["arguments"] = diff.tool_call_delta.arguments;
+        }
+        delta["tool_calls"] = json::array({
+            json {
+                {"index", diff.tool_call_index},
+                {"function", function}
+            }
+        });
+    }
+    return delta;
+}
+
 bool common_chat_verify_template(const std::string & tmpl, bool use_jinja) {
     if (use_jinja) {
         try {

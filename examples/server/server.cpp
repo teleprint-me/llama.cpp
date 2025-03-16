@@ -642,8 +642,8 @@ struct server_task_result_cmpl_final : server_task_result {
     oaicompat_type     oaicompat                = OAICOMPAT_TYPE_NONE;
     std::string        oaicompat_model;
     std::string        oaicompat_cmpl_id;
-    common_chat_syntax oaicompat_chat_syntax;
     common_chat_msg    oaicompat_msg;
+    std::vector<common_chat_msg_diff> oaicompat_msg_diffs;
 
     virtual int get_index() override {
         return index;
@@ -794,14 +794,32 @@ struct server_task_result_cmpl_final : server_task_result {
             finish_reason = oaicompat_msg.tool_calls.empty() ? "stop" : "tool_calls";
         }
 
-        json choice = json {
-            {"finish_reason", finish_reason},
-            {"index", 0},
-            {"delta", json::object()}
-        };
+        json deltas = json::array();
+        for (const auto & diff : oaicompat_msg_diffs) {
+            deltas.push_back({
+                {"choices", json::array({
+                    json {
+                        {"finish_reason", nullptr},
+                        {"index", 0},
+                        {"delta", common_chat_msg_diff_to_json_oaicompat<json>(diff)},
+                    },
+                })},
+                {"created", t},
+                {"id", oaicompat_cmpl_id},
+                {"model", oaicompat_model},
+                {"system_fingerprint", build_info},
+                {"object", "chat.completion.chunk"},
+            });
+        }
 
-        json ret = json {
-            {"choices",            json::array({choice})},
+        deltas.push_back({
+            {"choices", json::array({
+                json {
+                    {"finish_reason", finish_reason},
+                    {"index", 0},
+                    {"delta", json::object()},
+                },
+            })},
             {"created",            t},
             {"id",                 oaicompat_cmpl_id},
             {"model",              oaicompat_model},
@@ -812,13 +830,13 @@ struct server_task_result_cmpl_final : server_task_result {
                 {"prompt_tokens",     n_prompt_tokens},
                 {"total_tokens",      n_decoded + n_prompt_tokens},
             }},
-        };
+        });
 
         if (timings.prompt_n >= 0) {
-            ret.push_back({"timings", timings.to_json()});
+            deltas.back().push_back({"timings", timings.to_json()});
         }
 
-        return ret;
+        return deltas;
     }
 };
 
@@ -840,8 +858,7 @@ struct server_task_result_cmpl_partial : server_task_result {
     oaicompat_type  oaicompat = OAICOMPAT_TYPE_NONE;
     std::string     oaicompat_model;
     std::string     oaicompat_cmpl_id;
-    common_chat_msg oaicompat_previous_msg;
-    common_chat_msg oaicompat_new_msg;
+    std::vector<common_chat_msg_diff> oaicompat_msg_diffs;
 
     virtual int get_index() override {
         return index;
@@ -926,9 +943,9 @@ struct server_task_result_cmpl_partial : server_task_result {
         std::time_t t = std::time(0);
         json choices;
 
-        std::vector<json> rets;
-        auto add_ret = [&](const json & delta) {
-            rets.push_back({
+        std::vector<json> deltas;
+        auto add_delta = [&](const json & delta) {
+            deltas.push_back({
                 {"choices", json::array({
                     json {
                         {"finish_reason", nullptr},
@@ -945,66 +962,31 @@ struct server_task_result_cmpl_partial : server_task_result {
         };
         // We have to send an initial update to conform to openai behavior
         if (first) {
-            add_ret({
+            add_delta({
                 {"role", "assistant"},
                 {"content", nullptr},
             });
         }
 
-        common_chat_msg previous_msg;
-        if (oaicompat_previous_msg.empty()) {
-            previous_msg.role = "assistant";
-        } else {
-            previous_msg = oaicompat_previous_msg;
-        }
-        if (!oaicompat_new_msg.empty()) {
-            auto new_msg = oaicompat_new_msg;
-            auto diffs = common_chat_msg_diff::compute_diffs(previous_msg, new_msg);
-            for (const auto & diff : diffs) {
-                json delta = json::object();
-                // if (!diff.reasoning_content_delta.empty()) {
-                //     delta["reasoning_content"] = msg.reasoning_content;
-                // }
-                if (!diff.content_delta.empty()) {
-                    delta["content"] = diff.content_delta;
-                }
-                if (diff.tool_call_index != std::string::npos) {
-                    json function = json::object();
-                    if (!diff.tool_call_delta.name.empty()) {
-                        function["name"] = diff.tool_call_delta.name;
-                    }
-                    if (!diff.tool_call_delta.id.empty()) {
-                        function["id"] = diff.tool_call_delta.id;
-                    }
-                    if (!diff.tool_call_delta.arguments.empty()) {
-                        function["arguments"] = diff.tool_call_delta.arguments;
-                    }
-                    delta["tool_calls"] = json::array({
-                        json {
-                            {"index", diff.tool_call_index},
-                            {"function", function}
-                        }
-                    });
-                }
-                add_ret(delta);
-            }
+        for (const auto & diff : oaicompat_msg_diffs) {
+            add_delta(common_chat_msg_diff_to_json_oaicompat<json>(diff));
         }
 
-        if (!rets.empty()) {
-            GGML_ASSERT(rets[rets.size() - 1].at("choices").size() >= 1);
+        if (!deltas.empty()) {
+            GGML_ASSERT(deltas[deltas.size() - 1].at("choices").size() >= 1);
 
             if (prob_output.probs.size() > 0) {
-                rets[rets.size() - 1].at("choices").at(0)["logprobs"] = json {
+                deltas[deltas.size() - 1].at("choices").at(0)["logprobs"] = json {
                     {"content", completion_token_output::probs_vector_to_json({prob_output}, post_sampling_probs)},
                 };
             }
 
             if (timings.prompt_n >= 0) {
-                rets[rets.size() - 1].push_back({"timings", timings.to_json()});
+                deltas[deltas.size() - 1].push_back({"timings", timings.to_json()});
             }
         }
 
-        return rets;
+        return deltas;
     }
 };
 
@@ -1268,7 +1250,7 @@ struct server_slot {
 
     std::string  generated_text;
     llama_tokens generated_tokens;
-    common_chat_msg generated_msg;
+    common_chat_msg chat_msg;
 
     llama_tokens cache_tokens;
 
@@ -1319,7 +1301,7 @@ struct server_slot {
 
         generated_tokens.clear();
         generated_token_probs.clear();
-        generated_msg = {};
+        chat_msg = {};
         json_schema = json();
         generated_tool_call_ids.clear();
     }
@@ -1389,6 +1371,21 @@ struct server_slot {
         timings.predicted_per_second = 1e3 / t_token_generation * n_decoded;
 
         return timings;
+    }
+
+    const common_chat_msg & update_chat_msg(std::vector<common_chat_msg_diff> & diffs) {
+        auto previous_msg = chat_msg;
+        SRV_DBG("Parsing chat message: %s\n", generated_text.c_str());
+        auto new_msg = common_chat_parse(
+            generated_text,
+            /* is_partial= */ stop != STOP_TYPE_EOS,
+            params.oaicompat_chat_syntax);
+        if (!new_msg.empty()) {
+            new_msg.ensure_tool_call_ids_set(generated_tool_call_ids, gen_tool_call_id);
+            chat_msg = new_msg;
+            diffs = common_chat_msg_diff::compute_diffs(previous_msg, new_msg.empty() ? previous_msg : new_msg);
+        }
+        return chat_msg;
     }
 
     size_t find_stopping_strings(const std::string & text, const size_t last_token_size, bool is_full_stop) {
@@ -2358,18 +2355,7 @@ struct server_context {
         res->oaicompat_model       = slot.params.oaicompat_model;
         res->oaicompat_cmpl_id     = slot.params.oaicompat_cmpl_id;
 
-        auto previous_msg = slot.generated_msg;
-        SRV_DBG("Parsing chat message: %s\n", slot.generated_text.c_str());
-        auto new_msg = common_chat_parse(
-            slot.generated_text,
-            /* is_partial= */ true,
-            slot.params.oaicompat_chat_syntax);
-        if (!new_msg.empty()) {
-            new_msg.ensure_tool_call_ids_set(slot.generated_tool_call_ids, gen_tool_call_id);
-            slot.generated_msg = new_msg;
-        }
-        res->oaicompat_previous_msg = previous_msg;
-        res->oaicompat_new_msg      = new_msg.empty() ? previous_msg : new_msg;
+        slot.update_chat_msg(res->oaicompat_msg_diffs);
 
         // populate res.probs_output
         if (slot.params.sampling.n_probs > 0) {
@@ -2390,7 +2376,7 @@ struct server_context {
         res->id_slot         = slot.id;
 
         res->index           = slot.index;
-        res->content         = std::move(slot.generated_text);
+        res->content         = slot.generated_text;
         res->tokens          = std::move(slot.generated_tokens);
         res->timings         = slot.get_timings();
         res->prompt          = common_detokenize(ctx, slot.prompt_tokens, true);
@@ -2410,14 +2396,7 @@ struct server_context {
         res->oaicompat             = slot.params.oaicompat;
         res->oaicompat_model       = slot.params.oaicompat_model;
         res->oaicompat_cmpl_id     = slot.params.oaicompat_cmpl_id;
-
-        SRV_DBG("Parsing chat message: %s\n", res->content.c_str());
-        res->oaicompat_msg         = slot.generated_msg = common_chat_parse(
-            res->content,
-            /* is_partial= */ slot.stop == STOP_TYPE_LIMIT,
-            slot.params.oaicompat_chat_syntax);
-        res->oaicompat_msg.ensure_tool_call_ids_set(slot.generated_tool_call_ids, gen_tool_call_id);
-        res->oaicompat_chat_syntax = slot.params.oaicompat_chat_syntax;
+        res->oaicompat_msg         = slot.update_chat_msg(res->oaicompat_msg_diffs);
 
         // populate res.probs_output
         if (slot.params.sampling.n_probs > 0) {
