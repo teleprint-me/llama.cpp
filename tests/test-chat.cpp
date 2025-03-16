@@ -427,7 +427,7 @@ const common_chat_msg message_assist_thoughts {
     /* .tool_name = */ "",
     /* .tool_call_id = */ "",
 };
-const common_chat_msg message_assist_thoughts_unclosed_unparsed {
+const common_chat_msg message_assist_thoughts_unopened_unparsed {
     "assistant",
     "I'm thinking</think>Hello, world!\nWhat's up?",
     /* .content_parts = */ {},
@@ -1149,7 +1149,7 @@ static void test_template_output_parsers() {
                     /* .reasoning_in_content = */ false,
                     /* .thinking_forced_open = */ false,
                 }));
-        assert_msg_equals(message_assist_thoughts_unclosed_unparsed,
+        assert_msg_equals(message_assist_thoughts_unopened_unparsed,
             common_chat_parse(
                 "I'm thinking</think>Hello, world!\nWhat's up?",
                 /* is_partial= */ false,
@@ -1322,11 +1322,44 @@ static void test_template_output_parsers() {
 
         test_templates(tmpls.get(), end_tokens, message_assist, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
         test_templates(tmpls.get(), end_tokens, message_assist_thoughts, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
-        assert_msg_equals(message_assist_thoughts_unparsed_deepseek,
+        assert_msg_equals(
+            {
+                /* .role = */ "assistant",
+                /* .content = */ "Hello, world!\nWhat's up?",
+                /* .content_parts = */ {},
+                /* .tool_calls = */ {},
+                /* .reasoning_content = */ "<think>I'm thinking",
+                /* .tool_name = */ "",
+                /* .tool_call_id = */ ""
+            },
             common_chat_parse(
                 "<think>I'm thinking</think>Hello, world!\nWhat's up?",
                 /* is_partial= */ false,
-                {COMMON_CHAT_FORMAT_DEEPSEEK_R1}));
+                {
+                    COMMON_CHAT_FORMAT_DEEPSEEK_R1,
+                    /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
+                    /* .reasoning_in_content = */ false,
+                    /* .thinking_forced_open = */ true,
+                }));
+        assert_msg_equals(
+            {
+                /* .role = */ "assistant",
+                /* .content = */ "",
+                /* .content_parts = */ {},
+                /* .tool_calls = */ {},
+                /* .reasoning_content = */ "I need to remember the correct syntax. It starts with <｜tool▁calls▁begin｜> and ends with",
+                /* .tool_name = */ "",
+                /* .tool_call_id = */ ""
+            },
+            common_chat_parse(
+                "I need to remember the correct syntax. It starts with <｜tool▁calls▁begin｜> and ends with",
+                /* is_partial= */ true,
+                {
+                    COMMON_CHAT_FORMAT_DEEPSEEK_R1,
+                    /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
+                    /* .reasoning_in_content = */ false,
+                    /* .thinking_forced_open = */ true,
+                }));
         assert_msg_equals(message_assist_thoughts,
             common_chat_parse(
                 "<think>I'm thinking</think>Hello, world!\nWhat's up?",
@@ -1337,7 +1370,7 @@ static void test_template_output_parsers() {
                     /* .reasoning_in_content = */ false,
                     /* .thinking_forced_open = */ false,
                 }));
-        assert_msg_equals(message_assist_thoughts_unclosed_unparsed,
+        assert_msg_equals(message_assist_thoughts_unopened_unparsed,
             common_chat_parse(
                 "I'm thinking</think>Hello, world!\nWhat's up?",
                 /* is_partial= */ false,

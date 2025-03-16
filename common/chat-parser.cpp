@@ -151,18 +151,11 @@ bool common_chat_msg_parser::try_parse_reasoning(const std::string & start_think
             }
             auto rest = consume_rest();
             if (!rest.empty()) {
-                handle_reasoning(consume_rest(), /* closed */ !is_partial());
+                handle_reasoning(rest, /* closed */ !is_partial());
             }
             if (!syntax_.thinking_forced_open) {
                 throw common_chat_msg_partial_exception(end_think);
             }
-            return true;
-        } else {
-            return false;
-        }
-        if (auto res = try_find_literal(end_think)) {
-            handle_reasoning(res->prelude, /* closed */ true);
-            consume_spaces();
             return true;
         }
     }
