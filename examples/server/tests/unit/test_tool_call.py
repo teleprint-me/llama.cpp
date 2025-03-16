@@ -435,7 +435,7 @@ def test_calc_result(result_override: str | None, n_predict: int, hf_repo: str, 
     elif isinstance(template_override, str):
         server.chat_template = template_override
     server.start(timeout_seconds=TIMEOUT_SERVER_START)
-    do_test_calc_result(server, result_override, n_predict, stream=stream)
+    do_test_calc_result(server, result_override, n_predict, stream=stream == CompletionMode.STREAMED)
 
 
 def do_test_calc_result(server: ServerProcess, result_override: str | None, n_predict: int, **kwargs):
