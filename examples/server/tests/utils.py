@@ -349,7 +349,7 @@ class ServerProcess:
                         message=dict(
                             role='assistant',
                             content=''.join(content) if content else None,
-                            tool_calls=tool_calls,
+                            tool_calls=tool_calls if tool_calls else None,
                         ),
                     )
                 ],
