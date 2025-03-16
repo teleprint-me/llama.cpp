@@ -242,7 +242,11 @@ def test_chat_completion_with_timings_per_token():
         "stream": True,
         "timings_per_token": True,
     })
-    for data in res:
+
+    for i, data in enumerate(res):
+        if i == 0:
+            assert "timings" not in data, f'First event should not have timings: {data}'
+            continue
         assert "prompt_per_second" in data["timings"]
         assert "predicted_per_second" in data["timings"]
         assert "predicted_n" in data["timings"]
@@ -294,8 +298,15 @@ def test_logprobs_stream():
     )
     output_text = ''
     aggregated_text = ''
-    for data in res:
+
+    for i, data in enumerate(res):
+        assert len(data.choices) == 1
         choice = data.choices[0]
+
+        if i == 0:
+            assert choice.delta.content is None
+            continue
+
         if choice.finish_reason is None:
             if choice.delta.content:
                 output_text += choice.delta.content
