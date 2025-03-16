@@ -526,7 +526,7 @@ const common_chat_msg message_assist_call_thoughts = {
 };
 const common_chat_msg message_assist_call_thoughts_unparsed = {
     "assistant",
-    /* .content = */ "<think>I'm\nthinking</think>",
+    /* .content = */ "<think>I'm\nthinking</think>\n\n",
     /* .content_parts = */ {},
     tool_calls,
     /* .reasoning_content = */ "",
