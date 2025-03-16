@@ -499,16 +499,16 @@ def do_test_calc_result(server: ServerProcess, result_override: str | None, n_pr
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("stream", [CompletionMode.NORMAL, CompletionMode.STREAMED])
 @pytest.mark.parametrize("n_predict,reasoning_format,expect_content,expect_reasoning_content,hf_repo,template_override", [
-    (128, 'deepseek',  "^The sum of 102 and 7 is 109[\\s\\S]*",                        None,                                          "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",       None),
-    (128,  None,        "^The sum of 102 and 7 is 109[\\s\\S]*",                       None,                                          "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",       None),
-
-    (1024, 'deepseek',  "To find the sum of[\\s\\S]*",                                 "I need to calculate the sum of 102 and 7[\\s\\S]*",  "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
-    (1024, 'none',      "^(<think>\\s*)?I need[\\s\\S]*?</think>\\s*To find[\\s\\S]*",                None,                                          "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
-
-    (1024, 'deepseek',  "To find the sum of[\\s\\S]*",                                 "First, I [\\s\\S]*",                          "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", ("llama-cpp-deepseek-r1", None)),
+    (128, 'deepseek',   "^The sum of 102 and 7 is 109[\\s\\S]*", None,                                       "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",       None),
+    (128,  None,        "^The sum of 102 and 7 is 109[\\s\\S]*", None,                                       "bartowski/Phi-3.5-mini-instruct-GGUF:Q4_K_M",       None),
+    (1024, 'deepseek',  "To find the sum of[\\s\\S]*", "I need to calculate the sum of 102 and 7[\\s\\S]*",  "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
+    (1024, 'none',      "^(<think>\\s*)?I need[\\s\\S]*?</think>\\s*To find[\\s\\S]*", None,                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", None),
+    (1024, 'deepseek',  "To find the sum of[\\s\\S]*", "First, I [\\s\\S]*",                                 "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF:Q4_K_M", ("llama-cpp-deepseek-r1", None)),
+    # (128,  'deepseek',  None, "^Okay, let me figure out the sum of 102 and 7[\\s\\S]*",                      "bartowski/Qwen_QwQ-32B-GGUF:Q4_K_M",                None),
 ])
-def test_thoughts(n_predict: int, reasoning_format: Literal['deepseek', 'none'] | None, expect_content: str | None, expect_reasoning_content: str | None, hf_repo: str, template_override: str | Tuple[str, str | None] | None):
+def test_thoughts(n_predict: int, reasoning_format: Literal['deepseek', 'none'] | None, expect_content: str | None, expect_reasoning_content: str | None, hf_repo: str, template_override: str | Tuple[str, str | None] | None, stream: CompletionMode):
     global server
     server.reasoning_format = reasoning_format
     server.jinja = True
@@ -523,14 +523,14 @@ def test_thoughts(n_predict: int, reasoning_format: Literal['deepseek', 'none'] 
     elif isinstance(template_override, str):
         server.chat_template = template_override
     server.start(timeout_seconds=TIMEOUT_SERVER_START)
-    res = server.make_request("POST", "/v1/chat/completions", data={
+    body = server.make_any_request("POST", "/v1/chat/completions", data={
         "max_tokens": n_predict,
         "messages": [
             {"role": "user", "content": "What's the sum of 102 and 7?"},
-        ]
+        ],
+        "stream": stream == CompletionMode.STREAMED,
     }, timeout=TIMEOUT_HTTP_REQUEST)
-    assert res.status_code == 200, f"Expected status code 200, got {res.status_code}"
-    choice = res.body["choices"][0]
+    choice = body["choices"][0]
     assert choice["message"].get("tool_calls") is None, f'Expected no tool call in {choice["message"]}'
 
     content = choice["message"].get("content")
