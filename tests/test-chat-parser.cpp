@@ -158,11 +158,28 @@ static void test_regex() {
 const std::vector<std::string> barely_healable_jsons = {
   "{",
   "{\"",
+  "{\"\\",
   "{\"n",
   "{\"name\"",
   "{\"name\":",
   "{\"name\":\"",
+  "{\"name\":\"\\",
   "{\"name\":\"python",
+  "{\"name\":\"python\\",
+  "{\",",
+  "{\":",
+  "{\"[",
+  "{\"]",
+  "{\"{",
+  "{\"}",
+  "{\"1",
+  "{\"name\":\",",
+  "{\"name\":\":",
+  "{\"name\":\"[",
+  "{\"name\":\"]",
+  "{\"name\":\"{",
+  "{\"name\":\"}",
+  "{\"name\":\"1",
 };
 
 static void test(const std::string & input, bool is_partial, const std::vector<std::vector<std::string>> & args_paths, const std::vector<std::vector<std::string>> & content_paths, const std::string & expected) {

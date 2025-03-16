@@ -172,12 +172,12 @@ bool common_json_parse(
 
             if (err_loc.stack.back().type == COMMON_JSON_STACK_ELEMENT_KEY) {
                 // We're inside an object value
-                if (last_non_sp_char == ':') {
+                if (last_non_sp_char == ':' && can_parse(str + "1" + closing)) {
                     // Was about to create an object value
                     str += (out.healing_marker.json_dump_marker = "\"" + magic_seed) + "\"" + closing;
                 } else if (can_parse(str + ": 1" + closing)) {
                     str += (out.healing_marker.json_dump_marker = ":\"" + magic_seed) + "\"" + closing;
-                } else if (last_non_sp_char == '{') {
+                } else if (last_non_sp_char == '{' && can_parse(str + closing)) {
                     // Was about to create an object
                     str += (out.healing_marker.json_dump_marker = "\"" + magic_seed) + "\": 1" + closing;
                 } else if (can_parse(str + "\"" + closing)) {
@@ -196,7 +196,7 @@ bool common_json_parse(
                     str = str.substr(0, last_pos + 1) + (out.healing_marker.json_dump_marker = "\"" + magic_seed) + "\"" + closing;
                 }
             } else if (err_loc.stack.back().type == COMMON_JSON_STACK_ELEMENT_ARRAY) {
-                if (last_non_sp_char == ',' || last_non_sp_char == '[') {
+                if ((last_non_sp_char == ',' || last_non_sp_char == '[') && can_parse(str + "1" + closing)) {
                     // Was about to create an array value
                     str += (out.healing_marker.json_dump_marker = "\"" + magic_seed) + "\"" + closing;
                 } else if (can_parse(str + "\"" + closing)) {
@@ -217,7 +217,8 @@ bool common_json_parse(
                     str = str.substr(0, last_pos + 1) + (out.healing_marker.json_dump_marker = "\"" + magic_seed) + "\"" + closing;
                 }
             } else if (err_loc.stack.back().type == COMMON_JSON_STACK_ELEMENT_OBJECT) {
-                if (last_non_sp_char == ',' || last_non_sp_char == '{') {
+                if ((last_non_sp_char == '{' && can_parse(str + closing)) ||
+                        (last_non_sp_char == ',' && can_parse(str + "1" + closing))) {
                     // Was about to create an object key+value
                     str += (out.healing_marker.json_dump_marker = "\"" + magic_seed) + "\": 1" + closing;
                 } else if (!was_maybe_number() && can_parse(str + ",\"\": 1" + closing)) {
@@ -226,7 +227,7 @@ bool common_json_parse(
                 } else if (can_parse(str + "\": 1" + closing)) {
                     // Was inside an object key string
                     str += (out.healing_marker.json_dump_marker = magic_seed) + "\": 1" + closing;
-                } else if (str[str.length() - 1] == '\\' && can_parse(str + "\\\"" + closing)) {
+                } else if (str[str.length() - 1] == '\\' && can_parse(str + "\\\": 1" + closing)) {
                     // Was inside an object key string after an escape
                     str += (out.healing_marker.json_dump_marker = "\\" + magic_seed) + "\": 1" + closing;
                 } else {
