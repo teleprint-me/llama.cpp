@@ -193,14 +193,14 @@ std::optional<common_chat_msg_parser::find_regex_result> common_chat_msg_parser:
     return find_regex_result{prelude, m.groups};
 }
 
-common_chat_msg_parser::consume_regex_result common_chat_msg_parser::consume_regex(const common_regex & regex) {
+common_chat_msg_parser::find_regex_result common_chat_msg_parser::consume_regex(const common_regex & regex) {
     if (auto result = try_consume_regex(regex)) {
         return *result;
     }
     throw common_chat_msg_partial_exception(regex.str());
 }
 
-std::optional<common_chat_msg_parser::consume_regex_result> common_chat_msg_parser::try_consume_regex(const common_regex & regex) {
+std::optional<common_chat_msg_parser::find_regex_result> common_chat_msg_parser::try_consume_regex(const common_regex & regex) {
     auto m = regex.search(input_, pos_);
     if (m.type == COMMON_REGEX_MATCH_TYPE_NONE) {
         return std::nullopt;
@@ -217,7 +217,10 @@ std::optional<common_chat_msg_parser::consume_regex_result> common_chat_msg_pars
     }
     pos_ = m.groups[0].end;
 
-    return consume_regex_result{m.groups};
+    return find_regex_result {
+        /* .prelude = */ "",
+        m.groups,
+    };
 }
 
 std::optional<common_json> common_chat_msg_parser::try_consume_json() {

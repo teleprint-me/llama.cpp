@@ -83,12 +83,9 @@ class common_chat_msg_parser {
 
     std::optional<find_regex_result> try_find_literal(const std::string & literal);
 
-    struct consume_regex_result {
-        std::vector<common_string_range> groups;
-    };
-    consume_regex_result consume_regex(const common_regex & regex);
+    find_regex_result consume_regex(const common_regex & regex);
 
-    std::optional<consume_regex_result> try_consume_regex(const common_regex & regex);
+    std::optional<find_regex_result> try_consume_regex(const common_regex & regex);
 
     std::optional<common_json> try_consume_json();
     common_json consume_json();

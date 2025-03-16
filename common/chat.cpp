@@ -570,7 +570,8 @@ static std::string wrap_code_as_arguments(common_chat_msg_parser & builder, cons
 static void parse_json_tool_calls(
     common_chat_msg_parser & builder,
     const std::optional<common_regex> & block_open,
-    const common_regex & function_regex,
+    const std::optional<common_regex> & function_regex_start_only,
+    const std::optional<common_regex> & function_regex,
     const common_regex & close_regex,
     const std::optional<common_regex> & block_close,
     bool allow_raw_python = false,
@@ -578,8 +579,14 @@ static void parse_json_tool_calls(
 
     auto parse_tool_calls = [&]() {
         size_t from = std::string::npos;
+        auto first = true;
         while (true) {
-            if (auto res = builder.try_find_regex(function_regex, from)) {
+            auto res = function_regex_start_only && first
+                ? builder.try_consume_regex(*function_regex_start_only)
+                : function_regex
+                    ? builder.try_find_regex(*function_regex, from)
+                    : std::nullopt;
+            if (res) {
                 std::string name;
                 if (get_function_name) {
                     name = get_function_name(*res);
@@ -587,6 +594,7 @@ static void parse_json_tool_calls(
                     GGML_ASSERT(res->groups.size() == 2);
                     name = builder.str(res->groups[1]);
                 }
+                first = false;
                 if (name.empty()) {
                     // get_function_name signalled us that we should skip this match and treat it as content.
                     from = res->groups[0].begin + 1;
@@ -1055,12 +1063,12 @@ static void common_chat_parse_llama_3_1(common_chat_msg_parser & builder, bool w
     static const common_regex function_regex(
         "\\s*\\{\\s*(?:\"type\"\\s*:\\s*\"function\"\\s*,\\s*)?\"name\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"parameters\"\\s*: ");
     static const common_regex close_regex("\\}\\s*");
-    static const common_regex builtin_call_regex("<\\|python_tag\\|>");
-
+    
     static const common_regex function_name_regex("\\s*(\\w+)\\s*\\.\\s*call\\(");
     static const common_regex arg_name_regex("\\s*(\\w+)\\s*=\\s*");
-
+    
     if (with_builtin_tools) {
+        static const common_regex builtin_call_regex("<\\|python_tag\\|>");
         if (auto res = builder.try_find_regex(builtin_call_regex)) {
             builder.add_content(res->prelude);
 
@@ -1094,7 +1102,13 @@ static void common_chat_parse_llama_3_1(common_chat_msg_parser & builder, bool w
             return;
         }
     }
-    parse_json_tool_calls(builder, std::nullopt, function_regex, close_regex, std::nullopt);
+    parse_json_tool_calls(
+        builder,
+        /* block_open= */ std::nullopt,
+        /* function_regex_start_only= */ function_regex,
+        /* function_regex= */ std::nullopt,
+        close_regex,
+        std::nullopt);
 
 }
 
@@ -1175,7 +1189,13 @@ static void common_chat_parse_deepseek_r1(common_chat_msg_parser & builder) {
     static const common_regex function_regex("(?:<｜tool▁call▁begin｜>)?function<｜tool▁sep｜>([^\n]+)\n```json\n");
     static const common_regex close_regex("```[\\s\\r\\n]*<｜tool▁call▁end｜>");
 
-    parse_json_tool_calls(builder, tool_calls_begin, function_regex, close_regex, tool_calls_end);
+    parse_json_tool_calls(
+        builder,
+        /* block_open= */ tool_calls_begin,
+        /* function_regex_start_only= */ std::nullopt,
+        function_regex,
+        close_regex,
+        tool_calls_end);
 }
 
 static common_chat_params common_chat_params_init_firefunction_v2(const common_chat_template & tmpl, const struct templates_params & inputs) {
@@ -1278,17 +1298,21 @@ static common_chat_params common_chat_params_init_functionary_v3_2(const common_
     return data;
 }
 static void common_chat_parse_functionary_v3_2(common_chat_msg_parser & builder) {
-    static const common_regex function_regex(R"((>>>)?(\w+\n\{|python\n|all\n))");
+    static const common_regex function_regex_start_only(R"((\w+\n\{|python\n|all\n))");
+    static const common_regex function_regex(R"(>>>(\w+\n\{|python\n|all\n))");
     static const common_regex close_regex(R"(\s*)");
 
-    parse_json_tool_calls(builder, std::nullopt, function_regex, close_regex, std::nullopt, /* allow_raw_python= */ true,
+    parse_json_tool_calls(
+        builder,
+        std::nullopt,
+        function_regex_start_only,
+        function_regex,
+        close_regex,
+        std::nullopt,
+        /* allow_raw_python= */ true,
         /* get_function_name= */ [&](const auto & res) -> std::string {
             auto at_start = res.groups[0].begin == 0;
-            if (at_start != res.groups[1].empty()) {
-                // Only accept >>> as a match if it's not at the beginning.
-                return "";
-            }
-            auto name = builder.str(res.groups[2]);
+            auto name = builder.str(res.groups[1]);
             if (!name.empty() && name.back() == '{') {
                 // Unconsume the opening brace '{' to ensure the JSON parsing goes well.
                 builder.move_back(1);
@@ -1370,7 +1394,13 @@ static void common_chat_parse_functionary_v3_1_llama_3_1(common_chat_msg_parser 
     static const common_regex function_regex(R"(<function=(\w+)>)");
     static const common_regex close_regex(R"(</function>)");
 
-    parse_json_tool_calls(builder, std::nullopt, function_regex, close_regex, std::nullopt);
+    parse_json_tool_calls(
+        builder,
+        /* block_open= */ std::nullopt,
+        /* function_regex_start_only= */ std::nullopt,
+        function_regex,
+        close_regex,
+        std::nullopt);
 }
 
 static common_chat_params common_chat_params_init_hermes_2_pro(const common_chat_template & tmpl, const struct templates_params & inputs) {

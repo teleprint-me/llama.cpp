@@ -1193,6 +1193,13 @@ static void test_template_output_parsers() {
                           inputs_tools_builtin)
                           .format);
 
+        assert_equals(
+            message_assist_call,
+            common_chat_parse(
+                "{\"name\": \"special_function\", \"parameters\": {\"arg1\": 1}}",
+                /* is_partial= */ false,
+                {COMMON_CHAT_FORMAT_LLAMA_3_X}));
+
         // test_templates(tmpls.get(), end_tokens, message_assist, tools, R"(?)", /* expect_grammar_triggered= */ false);
         test_templates(tmpls.get(), end_tokens, message_assist_call_code_interpreter, llama_3_1_tools,
                       "<|python_tag|>code_interpreter.call(code=\"print('hey')\")");
