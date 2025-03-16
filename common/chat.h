@@ -3,7 +3,7 @@
 #pragma once
 
 #include "common.h"
-#include "regex-partial.h"
+#include <functional>
 #include <string>
 #include <vector>
 
