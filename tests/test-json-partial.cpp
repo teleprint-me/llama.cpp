@@ -54,14 +54,12 @@ static void test_json_healing() {
 
   parse_all("[{\"a\": \"b\"}]");
 
-  auto test = [&](const std::vector<std::string> & inputs, const std::string & expected, const std::optional<std::string> & expected_marker = std::nullopt) {
+  auto test = [&](const std::vector<std::string> & inputs, const std::string & expected, const std::string & expected_marker) {
       for (const auto & input : inputs) {
         common_json out;
         assert_equals(true, common_json_parse(input, "$foo", out));
         assert_equals<std::string>(expected, out.json.dump());
-        if (expected_marker) {
-            assert_equals<std::string>(*expected_marker, out.healing_marker.json_dump_marker);
-        }
+        assert_equals<std::string>(expected_marker, out.healing_marker.json_dump_marker);
       }
   };
   // No healing needed:
