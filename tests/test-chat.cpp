@@ -403,24 +403,24 @@ static common_chat_msg simple_assist_msg(const std::string & content, const std:
 }
 const common_chat_msg message_assist                             = simple_assist_msg("Hello, world!\nWhat's up?");
 const common_chat_msg message_assist_empty                       = simple_assist_msg("");
-const common_chat_msg message_assist_thoughts_unparsed_deepseek  = simple_assist_msg("<think>I'm thinking</think>Hello, world!\nWhat's up?");
-const common_chat_msg message_assist_thoughts_unparsed_r7b       = simple_assist_msg("<|START_THINKING|>I'm thinking<|END_THINKING|>Hello, world!\nWhat's up?");
-const common_chat_msg message_assist_thoughts                    = simple_assist_msg("Hello, world!\nWhat's up?", "I'm thinking");
-const common_chat_msg message_assist_thoughts_unopened_unparsed  = simple_assist_msg("I'm thinking</think>Hello, world!\nWhat's up?");
+const common_chat_msg message_assist_thoughts_unparsed_deepseek  = simple_assist_msg("<think>I'm\nthinking</think>Hello, world!\nWhat's up?");
+const common_chat_msg message_assist_thoughts_unparsed_r7b       = simple_assist_msg("<|START_THINKING|>I'm\nthinking<|END_THINKING|>Hello, world!\nWhat's up?");
+const common_chat_msg message_assist_thoughts                    = simple_assist_msg("Hello, world!\nWhat's up?", "I'm\nthinking");
+const common_chat_msg message_assist_thoughts_unopened_unparsed  = simple_assist_msg("I'm\nthinking</think>Hello, world!\nWhat's up?");
 const common_chat_msg message_assist_thoughts_no_content         = simple_assist_msg("", "I'm\nthinking");
-const common_chat_msg message_assist_call                        = simple_assist_msg("", "", "python", "{\"code\": \"print('hey')\"}");
-const common_chat_msg message_assist_call_content                = simple_assist_msg("Hello, world!\nWhat's up?", "", "special_function", "{\"arg1\": 1}");
-const common_chat_msg message_assist_call_empty_args             = simple_assist_msg("", "", "special_function", "{}");
-const common_chat_msg message_assist_call_cutoff_args            = simple_assist_msg("python", "{\"arg");
-const common_chat_msg message_assist_call_thoughts               = simple_assist_msg("", "I'm\nthinking", "special_function", "{\"arg1\": 1}");
+const common_chat_msg message_assist_call                        = simple_assist_msg("", "", "special_function", "{\"arg1\": 1}");
+const common_chat_msg message_assist_call_content                = simple_assist_msg("Hello, world!\nWhat's up?", "", "special_function", "{\"arg1\":1}");
+const common_chat_msg message_assist_call_empty_args             = simple_assist_msg("", "", "special_function");
+const common_chat_msg message_assist_call_cutoff_args            = simple_assist_msg("", "", "special_function", "{\"arg");
+const common_chat_msg message_assist_call_thoughts               = simple_assist_msg("", "I'm\nthinking", "special_function", "{\"arg1\":1}");
 const common_chat_msg message_assist_call_thoughts_unparsed      = simple_assist_msg("<think>I'm\nthinking</think>\n\n", "", "special_function", "{\"arg1\": 1}");
-const common_chat_msg message_assist_call_id                     = simple_assist_msg("", "", "special_function", "{\"arg1\": 1}", /* .id = */ "123456789");
-const common_chat_msg message_assist_call_idx                    = simple_assist_msg("", "", "special_function", "{\"arg1\": 1}", /* .id = */ "0");
-const common_chat_msg message_assist_thoughts_call_idx           = simple_assist_msg("", "I'm thinking", "special_function", "{\"arg1\": 1}", /* id = */ "0");
-const common_chat_msg message_assist_call_python                 = simple_assist_msg("", "", "python", "{\"code\": \"print('hey')\"}");
-const common_chat_msg message_assist_call_python_lines           = simple_assist_msg("", "", "python", "# This is a program:\nprint('hey')\n");
+const common_chat_msg message_assist_call_id                     = simple_assist_msg("", "", "special_function", "{\"arg1\":1}", /* .id = */ "123456789");
+const common_chat_msg message_assist_call_idx                    = simple_assist_msg("", "", "special_function", "{\"arg1\":1}", /* .id = */ "0");
+const common_chat_msg message_assist_thoughts_call_idx           = simple_assist_msg("", "I'm\nthinking", "special_function", "{\"arg1\": 1}", /* id = */ "0");
+const common_chat_msg message_assist_call_python                 = simple_assist_msg("", "", "python", "{\"code\":\"print('hey')\"}");
+const common_chat_msg message_assist_call_python_lines           = simple_assist_msg("", "", "python", "{\"code\":\"# This is a program:\\nprint('hey')\"}");
 const common_chat_msg message_assist_call_python_lines_unclosed  = simple_assist_msg("", "", "python", "{\"code\":\"# This is a program:\\nprint('hey')");
-const common_chat_msg message_assist_call_code_interpreter       = simple_assist_msg("", "", "code_interpreter", "{\"code\": \"print('hey')\"}");
+const common_chat_msg message_assist_call_code_interpreter       = simple_assist_msg("", "", "code_interpreter", "{\"code\":\"print('hey')\"}");
 
 static void test_msgs_oaicompat_json_conversion() {
     printf("[%s]\n", __func__);
@@ -473,7 +473,7 @@ static void test_msgs_oaicompat_json_conversion() {
             "        \"type\": \"function\",\n"
             "        \"function\": {\n"
             "          \"name\": \"python\",\n"
-            "          \"arguments\": \"{\\\"code\\\": \\\"print('hey')\\\"}\"\n"
+            "          \"arguments\": \"{\\\"code\\\":\\\"print('hey')\\\"}\"\n"
             "        }\n"
             "      }\n"
             "    ]\n"
@@ -584,7 +584,7 @@ static void test_template_output_parsers() {
                 {COMMON_CHAT_FORMAT_COMMAND_R7B}));
         assert_msg_equals(message_assist_thoughts,
             common_chat_parse(
-                "<|START_THINKING|>I'm thinking<|END_THINKING|>"
+                "<|START_THINKING|>I'm\nthinking<|END_THINKING|>"
                 "<|START_RESPONSE|>Hello, world!\nWhat's up?<|END_RESPONSE|>",
                 /* is_partial= */ false,
                 {
@@ -595,7 +595,7 @@ static void test_template_output_parsers() {
                 }));
         assert_msg_equals(message_assist_thoughts_unparsed_deepseek,
             common_chat_parse(
-                "<|START_THINKING|>I'm thinking<|END_THINKING|>"
+                "<|START_THINKING|>I'm\nthinking<|END_THINKING|>"
                 "<|START_RESPONSE|>Hello, world!\nWhat's up?<|END_RESPONSE|>",
                 /* is_partial= */ false,
                 {
@@ -606,13 +606,13 @@ static void test_template_output_parsers() {
                 }));
         assert_msg_equals(message_assist_thoughts_unparsed_r7b,
             common_chat_parse(
-                "<|START_THINKING|>I'm thinking<|END_THINKING|>"
+                "<|START_THINKING|>I'm\nthinking<|END_THINKING|>"
                 "<|START_RESPONSE|>Hello, world!\nWhat's up?<|END_RESPONSE|>",
                 /* is_partial= */ false,
                 {COMMON_CHAT_FORMAT_COMMAND_R7B}));
         assert_msg_equals(message_assist_thoughts,
             common_chat_parse(
-                "<|START_THINKING|>I'm thinking<|END_THINKING|>"
+                "<|START_THINKING|>I'm\nthinking<|END_THINKING|>"
                 "<|START_RESPONSE|>Hello, world!\nWhat's up?<|END_RESPONSE|>",
                 /* is_partial= */ false,
                 {
@@ -944,16 +944,16 @@ static void test_template_output_parsers() {
                 {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
         assert_msg_equals(message_assist_thoughts_unparsed_deepseek,
             common_chat_parse(
-                "<think>I'm thinking</think>Hello, world!\nWhat's up?",
+                "<think>I'm\nthinking</think>Hello, world!\nWhat's up?",
                 /* is_partial= */ false,
                 {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
         // assert_msg_equals(message_assist_thoughts_unparsed_deepseek,
         //     common_chat_parse(
-        //         "I'm thinking</think>Hello, world!\nWhat's up?",
+        //         "I'm\nthinking</think>Hello, world!\nWhat's up?",
         //         COMMON_CHAT_FORMAT_HERMES_2_PRO));
         assert_msg_equals(message_assist_thoughts,
             common_chat_parse(
-                "<think>I'm thinking</think>Hello, world!\nWhat's up?",
+                "<think>I'm\nthinking</think>Hello, world!\nWhat's up?",
                 /* is_partial= */ false,
                 {
                     /* .format = */ COMMON_CHAT_FORMAT_HERMES_2_PRO,
@@ -963,7 +963,7 @@ static void test_template_output_parsers() {
                 }));
         assert_msg_equals(message_assist_thoughts_unopened_unparsed,
             common_chat_parse(
-                "I'm thinking</think>Hello, world!\nWhat's up?",
+                "I'm\nthinking</think>Hello, world!\nWhat's up?",
                 /* is_partial= */ false,
                 {
                     /* .format = */ COMMON_CHAT_FORMAT_HERMES_2_PRO,
@@ -973,7 +973,7 @@ static void test_template_output_parsers() {
                 }));
         assert_msg_equals(message_assist_thoughts,
             common_chat_parse(
-                "I'm thinking</think>Hello, world!\nWhat's up?",
+                "I'm\nthinking</think>Hello, world!\nWhat's up?",
                 /* is_partial= */ false,
                 {
                     /* .format = */ COMMON_CHAT_FORMAT_HERMES_2_PRO,
@@ -989,7 +989,7 @@ static void test_template_output_parsers() {
                       "</tool_call>");
         test_templates(tmpls.get(), end_tokens, message_assist_call_python_lines, tools,
                       "<tool_call>\n"
-                      "{\"name\": \"python\", \"arguments\": {\"code\": \"# This is a program:\\nprint('hey')\"}}\n"
+                      "{\"name\": \"python\", \"arguments\": {\"code\":\"# This is a program:\\nprint('hey')\"}}\n"
                       "</tool_call>");
     }
     {
@@ -1131,9 +1131,9 @@ static void test_template_output_parsers() {
         test_templates(tmpls.get(), end_tokens, message_assist, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
         test_templates(tmpls.get(), end_tokens, message_assist_thoughts, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
         assert_msg_equals(
-            simple_assist_msg("Hello, world!\nWhat's up?", "<think>I'm thinking"),
+            simple_assist_msg("Hello, world!\nWhat's up?", "<think>I'm\nthinking"),
             common_chat_parse(
-                "<think>I'm thinking</think>Hello, world!\nWhat's up?",
+                "<think>I'm\nthinking</think>Hello, world!\nWhat's up?",
                 /* is_partial= */ false,
                 {
                     COMMON_CHAT_FORMAT_DEEPSEEK_R1,
@@ -1154,7 +1154,7 @@ static void test_template_output_parsers() {
                 }));
         assert_msg_equals(message_assist_thoughts,
             common_chat_parse(
-                "<think>I'm thinking</think>Hello, world!\nWhat's up?",
+                "<think>I'm\nthinking</think>Hello, world!\nWhat's up?",
                 /* is_partial= */ false,
                 {
                     /* .format = */ COMMON_CHAT_FORMAT_DEEPSEEK_R1,
@@ -1164,7 +1164,7 @@ static void test_template_output_parsers() {
                 }));
         assert_msg_equals(message_assist_thoughts_unopened_unparsed,
             common_chat_parse(
-                "I'm thinking</think>Hello, world!\nWhat's up?",
+                "I'm\nthinking</think>Hello, world!\nWhat's up?",
                 /* is_partial= */ false,
                 {
                     /* .format = */ COMMON_CHAT_FORMAT_DEEPSEEK_R1,
@@ -1174,7 +1174,7 @@ static void test_template_output_parsers() {
                 }));
         assert_msg_equals(message_assist_thoughts,
             common_chat_parse(
-                "I'm thinking</think>Hello, world!\nWhat's up?",
+                "I'm\nthinking</think>Hello, world!\nWhat's up?",
                 /* is_partial= */ false,
                 {
                     /* .format = */ COMMON_CHAT_FORMAT_DEEPSEEK_R1,
@@ -1185,7 +1185,7 @@ static void test_template_output_parsers() {
         assert_msg_equals(message_assist_thoughts,
             // Latest template update (ast of 20250209) adds a trailing <think>\n if add_generation_prompt is true.
             common_chat_parse(
-                "I'm thinking</think>Hello, world!\nWhat's up?",
+                "I'm\nthinking</think>Hello, world!\nWhat's up?",
                 /* is_partial= */ false,
                 {
                     /* .format = */ COMMON_CHAT_FORMAT_DEEPSEEK_R1,
@@ -1213,12 +1213,12 @@ static void test_template_output_parsers() {
         test_templates(tmpls.get(), end_tokens, message_assist_thoughts, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
         assert_msg_equals(message_assist_thoughts_unparsed_deepseek,
             common_chat_parse(
-                "<think>I'm thinking</think>Hello, world!\nWhat's up?",
+                "<think>I'm\nthinking</think>Hello, world!\nWhat's up?",
                 /* is_partial= */ false,
                 {COMMON_CHAT_FORMAT_DEEPSEEK_R1}));
         assert_msg_equals(message_assist_thoughts,
             common_chat_parse(
-                "<think>I'm thinking</think>Hello, world!\nWhat's up?",
+                "<think>I'm\nthinking</think>Hello, world!\nWhat's up?",
                 /* is_partial= */ false,
                 {
                     /* .format = */ COMMON_CHAT_FORMAT_DEEPSEEK_R1,
@@ -1228,7 +1228,7 @@ static void test_template_output_parsers() {
                 }));
         assert_msg_equals(message_assist_thoughts,
             common_chat_parse(
-                "I'm thinking</think>Hello, world!\nWhat's up?",
+                "I'm\nthinking</think>Hello, world!\nWhat's up?",
                 /* is_partial= */ false,
                 {
                     /* .format = */ COMMON_CHAT_FORMAT_DEEPSEEK_R1,
