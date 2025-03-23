@@ -54,19 +54,172 @@ static void test_json_healing() {
 
   parse_all("[{\"a\": \"b\"}]");
 
-  common_json out;
-  assert_equals(true, common_json_parse("[{\"a\": \"b\"}", "$foo", out));
-  assert_equals<std::string>("[{\"a\":\"b\"},\"$foo\"]", out.json.dump());
+  auto test = [&](const std::vector<std::string> & inputs, const std::string & expected, const std::optional<std::string> & expected_marker = std::nullopt) {
+      for (const auto & input : inputs) {
+        common_json out;
+        assert_equals(true, common_json_parse(input, "$foo", out));
+        assert_equals<std::string>(expected, out.json.dump());
+        if (expected_marker) {
+            assert_equals<std::string>(*expected_marker, out.healing_marker.json_dump_marker);
+        }
+      }
+  };
+  // No healing needed:
+  test(
+    {
+      R"([{"a":"b"}, "y"])",
+    },
+    R"([{"a":"b"},"y"])",
+    ""
+  );
+  // Partial literals can't be healed:
+  test(
+    {
+      R"([1)",
+      R"([tru)",
+      R"([n)",
+      R"([nul)",
+      R"([23.2)",
+    },
+    R"(["$foo"])",
+    R"("$foo)"
+  );
+  test(
+    {
+      R"({"a": 1)",
+      R"({"a": tru)",
+      R"({"a": n)",
+      R"({"a": nul)",
+      R"({"a": 23.2)",
+    },
+    R"({"a":"$foo"})",
+    R"("$foo)"
+  );
+  // Healing right after a full literal
+  test(
+    {
+      R"(1 )",
+    },
+    R"(1)",
+    ""
+  );
+  test(
+    {
+      R"(true)",
+      R"(true )",
+    },
+    R"(true)",
+    ""
+  );
+  test(
+    {
+      R"(null)",
+      R"(null )",
+    },
+    R"(null)",
+    ""
+  );
+  test(
+    {
+      R"([1 )",
+    },
+    R"([1,"$foo"])",
+    R"(,"$foo)"
+  );
+  test(
+    {
+      R"([{})",
+      R"([{} )",
+    },
+    R"([{},"$foo"])",
+    R"(,"$foo)"
+  );
+  test(
+    {
+      R"([true)",
+    },
+    // TODO: detect the true/false/null literal was complete
+    R"(["$foo"])",
+    R"("$foo)"
+  );
+  test(
+    {
+      R"([true )",
+    },
+    R"([true,"$foo"])",
+    R"(,"$foo)"
+  );
+  test(
+    {
+      R"([true,)",
+    },
+    R"([true,"$foo"])",
+    R"("$foo)"
+  );
+  // Test nesting
+  test(
+    {
+      R"([{"a": [{"b": [{)",
+    },
+    R"([{"a":[{"b":[{"$foo":1}]}]}])",
+    R"("$foo)"
+  );
+  test(
+    {
+      R"([{"a": [{"b": [)",
+    },
+    R"([{"a":[{"b":["$foo"]}]}])",
+    R"("$foo)"
+  );
 
-  assert_equals(true, common_json_parse("{ \"code", "$foo", out));
-  assert_equals<std::string>("{\"code$foo\":1}", out.json.dump());
-  assert_equals<std::string>("$foo", out.healing_marker.json_dump_marker);
-
-  assert_equals(true, common_json_parse("{ \"code\"", "$foo", out));
-  assert_equals<std::string>("{\"code\":\"$foo\"}", out.json.dump());
+  test(
+    {
+      R"([{"a": "b"})",
+      R"([{"a": "b"} )",
+    },
+    R"([{"a":"b"},"$foo"])",
+    R"(,"$foo)"
+  );
+  test(
+    {
+      R"([{"a": "b"},)",
+      R"([{"a": "b"}, )",
+    },
+    R"([{"a":"b"},"$foo"])",
+    R"("$foo)"
+  );
+  test(
+    {
+      R"({ "code)",
+    },
+    R"({"code$foo":1})",
+    R"($foo)"
+  );
+  test(
+    {
+      R"({ "code\)",
+    },
+    R"({"code\\$foo":1})",
+    R"(\$foo)"
+  );
+  test(
+    {
+      R"({ "code")",
+    },
+    R"({"code":"$foo"})",
+    R"(:"$foo)"
+  );
+  test(
+    {
+      R"({ "key")",
+    },
+    R"({"key":"$foo"})",
+    R"(:"$foo)"
+  );
 }
 
 int main() {
     test_json_healing();
+    std::cerr << "All tests passed.\n";
     return 0;
 }

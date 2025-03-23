@@ -391,211 +391,36 @@ const common_chat_msg message_user_parts {
     /* .tool_name = */ "",
     /* .tool_call_id = */ "",
 };
-const common_chat_msg message_assist {
-    "assistant",
-    "Hello, world!\nWhat's up?",
-    /* .content_parts = */ {},
-    /* .tool_calls = */ {},
-    /* .reasoning_content = */ "",
-    /* .tool_name = */ "",
-    /* .tool_call_id = */ "",
-};
-const common_chat_msg message_assist_thoughts_unparsed_deepseek {
-    "assistant",
-    "<think>I'm thinking</think>Hello, world!\nWhat's up?",
-    /* .content_parts = */ {},
-    /* .tool_calls = */ {},
-    /* .reasoning_content = */ "",
-    /* .tool_name = */ "",
-    /* .tool_call_id = */ "",
-};
-const common_chat_msg message_assist_thoughts_unparsed_r7b {
-    "assistant",
-    "<|START_THINKING|>I'm thinking<|END_THINKING|>Hello, world!\nWhat's up?",
-    /* .content_parts = */ {},
-    /* .tool_calls = */ {},
-    /* .reasoning_content = */ "",
-    /* .tool_name = */ "",
-    /* .tool_call_id = */ "",
-};
-const common_chat_msg message_assist_thoughts {
-    "assistant",
-    "Hello, world!\nWhat's up?",
-    /* .content_parts = */ {},
-    /* .tool_calls = */ {},
-    /* .reasoning_content = */ "I'm thinking",
-    /* .tool_name = */ "",
-    /* .tool_call_id = */ "",
-};
-const common_chat_msg message_assist_thoughts_unopened_unparsed {
-    "assistant",
-    "I'm thinking</think>Hello, world!\nWhat's up?",
-    /* .content_parts = */ {},
-    /* .tool_calls = */ {},
-    /* .reasoning_content = */ "",
-    /* .tool_name = */ "",
-    /* .tool_call_id = */ "",
-};
-const std::vector<common_chat_tool_call> tool_calls {
-    { "special_function", "{\"arg1\": 1}", /* .id = */ "" },
-};
-const std::vector<common_chat_tool_call> tool_calls_cutoff_args {
-    { "special_function", "{\"arg", /* .id = */ "" },
-};
-const std::vector<common_chat_tool_call> tool_calls_empty_args {
-    { "special_function", "", /* .id = */ "" },
-};
-const std::vector<common_chat_tool_call> tool_calls_idx {
-    { "special_function", "{\"arg1\": 1}", /* .id = */ "0" },
-};
-const std::vector<common_chat_tool_call> tool_calls_id {
-    { "special_function", "{\"arg1\": 1}", /* .id = */ "123456789" },
-};
-const std::vector<common_chat_tool_call> tool_calls_python {
-    { "python", "{\"code\": \"print('hey')\"}", /* .id = */ "" },
-};
-const std::vector<common_chat_tool_call> tool_calls_python_lines {
-    { "python", "{\"code\": \"# This is a program:\\nprint('hey')\"}", /* .id = */ "" },
-};
-const std::vector<common_chat_tool_call> tool_calls_python_lines_unclosed {
-    { "python", "{\"code\":\"# This is a program:\\nprint('hey')", /* .id = */ "" },
-};
-
-const common_chat_msg message_assist_empty {
-    "assistant",
-    "",
-    /* .content_parts = */ {},
-    /* .tool_calls = */ {},
-    /* .reasoning_content = */ "",
-    /* .tool_name = */ "",
-    /* .tool_call_id = */ "",
-};
-const common_chat_msg message_assist_call {
-    "assistant",
-    "",
-    /* .content_parts = */ {},
-    tool_calls,
-    /* .reasoning_content = */ "",
-    /* .tool_name = */ "",
-    /* .tool_call_id = */ "",
-};
-const common_chat_msg message_assist_call_content {
-    "assistant",
-    "Hello, world!\nWhat's up?",
-    /* .content_parts = */ {},
-    tool_calls,
-    /* .reasoning_content = */ "",
-    /* .tool_name = */ "",
-    /* .tool_call_id = */ "",
-};
-const common_chat_msg message_assist_thoughts_no_content {
-    "assistant",
-    "",
-    /* .content_parts = */ {},
-    /* .tool_calls = */ {},
-    /* .reasoning_content = */ "I'm\nthinking",
-    /* .tool_name = */ "",
-    /* .tool_call_id = */ "",
-};
-const common_chat_msg message_assist_call_empty_args {
-    "assistant",
-    "",
-    /* .content_parts = */ {},
-    tool_calls_empty_args,
-    /* .reasoning_content = */ "",
-    /* .tool_name = */ "",
-    /* .tool_call_id = */ "",
-};
-const common_chat_msg message_assist_call_cutoff_args {
-    "assistant",
-    "",
-    /* .content_parts = */ {},
-    tool_calls_cutoff_args,
-    /* .reasoning_content = */ "",
-    /* .tool_name = */ "",
-    /* .tool_call_id = */ "",
-};
-const common_chat_msg message_assist_call_thoughts = {
-    "assistant",
-    /* .content = */ "",
-    /* .content_parts = */ {},
-    tool_calls,
-    /* .reasoning_content = */ "I'm\nthinking",
-    /* .tool_name = */ "",
-    /* .tool_call_id = */ "",
-};
-const common_chat_msg message_assist_call_thoughts_unparsed = {
-    "assistant",
-    /* .content = */ "<think>I'm\nthinking</think>\n\n",
-    /* .content_parts = */ {},
-    tool_calls,
-    /* .reasoning_content = */ "",
-    /* .tool_name = */ "",
-    /* .tool_call_id = */ "",
-};
-const common_chat_msg message_assist_call_id {
-    "assistant",
-    "",
-    /* .content_parts = */ {},
-    tool_calls_id,
-    /* .reasoning_content = */ "",
-    /* .tool_name = */ "",
-    /* .tool_call_id = */ "",
-};
-const common_chat_msg message_assist_call_idx {
-    "assistant",
-    "",
-    /* .content_parts = */ {},
-    tool_calls_idx,
-    /* .reasoning_content = */ "",
-    /* .tool_name = */ "",
-    /* .tool_call_id = */ "",
-};
-const common_chat_msg message_assist_thoughts_call_idx {
-    "assistant",
-    "",
-    /* .content_parts = */ {},
-    tool_calls_idx,
-    /* .reasoning_content = */ "I'm\nthinking",
-    /* .tool_name = */ "",
-    /* .tool_call_id = */ "",
-};
-const common_chat_msg message_assist_call_python {
-    "assistant",
-    "",
-    /* .content_parts = */ {},
-    tool_calls_python,
-    /* .reasoning_content = */ "",
-    /* .tool_name = */ "",
-    /* .tool_call_id = */ "",
-};
-const common_chat_msg message_assist_call_python_lines {
-    "assistant",
-    "",
-    /* .content_parts = */ {},
-    tool_calls_python_lines,
-    /* .reasoning_content = */ "",
-    /* .tool_name = */ "",
-    /* .tool_call_id = */ "",
-};
-const common_chat_msg message_assist_call_python_lines_unclosed {
-    "assistant",
-    "",
-    /* .content_parts = */ {},
-    tool_calls_python_lines_unclosed,
-    /* .reasoning_content = */ "",
-    /* .tool_name = */ "",
-    /* .tool_call_id = */ "",
-};
-const common_chat_msg message_assist_call_code_interpreter {
-    "assistant",
-    "",
-    /* .content_parts = */ {},
-    { { "code_interpreter", "{\"code\": \"print('hey')\"}", /* .id = */ "" } },
-    /* .reasoning_content = */ "",
-    /* .tool_name = */ "",
-    /* .tool_call_id = */ "",
-};
+static common_chat_msg simple_assist_msg(const std::string & content, const std::string & reasoning_content = "", const std::string & tool_name = "", const std::string & arguments = "", const std::string & id = "") {
+    common_chat_msg msg;
+    msg.role = "assistant";
+    msg.content = content;
+    msg.reasoning_content = reasoning_content;
+    if (!tool_name.empty()) {
+        msg.tool_calls.push_back({ tool_name, arguments, id });
+    }
+    return msg;
+}
+const common_chat_msg message_assist                             = simple_assist_msg("Hello, world!\nWhat's up?");
+const common_chat_msg message_assist_empty                       = simple_assist_msg("");
+const common_chat_msg message_assist_thoughts_unparsed_deepseek  = simple_assist_msg("<think>I'm thinking</think>Hello, world!\nWhat's up?");
+const common_chat_msg message_assist_thoughts_unparsed_r7b       = simple_assist_msg("<|START_THINKING|>I'm thinking<|END_THINKING|>Hello, world!\nWhat's up?");
+const common_chat_msg message_assist_thoughts                    = simple_assist_msg("Hello, world!\nWhat's up?", "I'm thinking");
+const common_chat_msg message_assist_thoughts_unopened_unparsed  = simple_assist_msg("I'm thinking</think>Hello, world!\nWhat's up?");
+const common_chat_msg message_assist_thoughts_no_content         = simple_assist_msg("", "I'm\nthinking");
+const common_chat_msg message_assist_call                        = simple_assist_msg("", "", "python", "{\"code\": \"print('hey')\"}");
+const common_chat_msg message_assist_call_content                = simple_assist_msg("Hello, world!\nWhat's up?", "", "special_function", "{\"arg1\": 1}");
+const common_chat_msg message_assist_call_empty_args             = simple_assist_msg("", "", "special_function", "{}");
+const common_chat_msg message_assist_call_cutoff_args            = simple_assist_msg("python", "{\"arg");
+const common_chat_msg message_assist_call_thoughts               = simple_assist_msg("", "I'm\nthinking", "special_function", "{\"arg1\": 1}");
+const common_chat_msg message_assist_call_thoughts_unparsed      = simple_assist_msg("<think>I'm\nthinking</think>\n\n", "", "special_function", "{\"arg1\": 1}");
+const common_chat_msg message_assist_call_id                     = simple_assist_msg("", "", "special_function", "{\"arg1\": 1}", /* .id = */ "123456789");
+const common_chat_msg message_assist_call_idx                    = simple_assist_msg("", "", "special_function", "{\"arg1\": 1}", /* .id = */ "0");
+const common_chat_msg message_assist_thoughts_call_idx           = simple_assist_msg("", "I'm thinking", "special_function", "{\"arg1\": 1}", /* id = */ "0");
+const common_chat_msg message_assist_call_python                 = simple_assist_msg("", "", "python", "{\"code\": \"print('hey')\"}");
+const common_chat_msg message_assist_call_python_lines           = simple_assist_msg("", "", "python", "# This is a program:\nprint('hey')\n");
+const common_chat_msg message_assist_call_python_lines_unclosed  = simple_assist_msg("", "", "python", "{\"code\":\"# This is a program:\\nprint('hey')");
+const common_chat_msg message_assist_call_code_interpreter       = simple_assist_msg("", "", "code_interpreter", "{\"code\": \"print('hey')\"}");
 
 static void test_msgs_oaicompat_json_conversion() {
     printf("[%s]\n", __func__);
@@ -855,6 +680,14 @@ static void test_template_output_parsers() {
                 "{ \"tool_call\" : { \"name\" : \"t",
                 /* is_partial= */ true,
                 {COMMON_CHAT_FORMAT_GENERIC}));
+
+        assert_equals(
+            simple_assist_msg("", "", "puppeteer_screenshot", "{\"name\":\"servethehome_homepage\","),
+            common_chat_parse(
+                R"({"tool_call": {"name": "puppeteer_screenshot", "arguments": {"name": "servethehome_homepage",)",
+                /* is_partial= */ true,
+                {COMMON_CHAT_FORMAT_GENERIC}));
+
         assert_equals(
             message_assist_call_empty_args,
             common_chat_parse(
@@ -933,21 +766,7 @@ static void test_template_output_parsers() {
 
         // Test parsing
         assert_msg_equals(
-            {
-                /* .role = */ "assistant",
-                /* .content = */ "",
-                /* .content_parts = */ {},
-                /* .tool_calls = */ {
-                    {
-                        /* .name = */ "python",
-                        /* .arguments = */ "",
-                        /* .id = */ "",
-                    }
-                },
-                /* .reasoning_content = */ "",
-                /* .tool_name = */ "",
-                /* .tool_call_id = */ "",
-            },
+            simple_assist_msg("", "", "python", ""),
             common_chat_parse(
                 "```json\n"
                 "<function_call> { \"name\" : \"python\"",
@@ -1110,16 +929,9 @@ static void test_template_output_parsers() {
                 {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
 
         assert_msg_equals(
-            {
-                /* .role = */ "assistant",
+            simple_assist_msg(
                 "This is not a tool call:\n"
-                "{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}",
-                /* .content_parts = */ {},
-                /* .tool_calls = */ {},
-                /* .reasoning_content = */ "",
-                /* .tool_name = */ "",
-                /* .tool_call_id = */ "",
-            },
+                "{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}"),
             common_chat_parse(
                 "This is not a tool call:\n"
                 "{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}",
@@ -1246,15 +1058,11 @@ static void test_template_output_parsers() {
         assert_equals(COMMON_CHAT_FORMAT_FUNCTIONARY_V3_2, common_chat_templates_apply(tmpls.get(), inputs_tools).format);
 
         assert_msg_equals(
-            common_chat_msg {
-                "assistant",
+            simple_assist_msg(
                 "Hello, world!\nnono\nWhat's up?",
-                /* .content_parts = */ {},
-                /* .tool_calls = */ tool_calls,
-                /* .reasoning_content = */ "",
-                /* .tool_name = */ "",
-                /* .tool_call_id = */ ""
-            },
+                "",
+                "special_function",
+                "{\"arg1\": 1}"),
             common_chat_parse(
                 "all\n"
                 "Hello, world!\n"
@@ -1323,15 +1131,7 @@ static void test_template_output_parsers() {
         test_templates(tmpls.get(), end_tokens, message_assist, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
         test_templates(tmpls.get(), end_tokens, message_assist_thoughts, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
         assert_msg_equals(
-            {
-                /* .role = */ "assistant",
-                /* .content = */ "Hello, world!\nWhat's up?",
-                /* .content_parts = */ {},
-                /* .tool_calls = */ {},
-                /* .reasoning_content = */ "<think>I'm thinking",
-                /* .tool_name = */ "",
-                /* .tool_call_id = */ ""
-            },
+            simple_assist_msg("Hello, world!\nWhat's up?", "<think>I'm thinking"),
             common_chat_parse(
                 "<think>I'm thinking</think>Hello, world!\nWhat's up?",
                 /* is_partial= */ false,
@@ -1342,15 +1142,7 @@ static void test_template_output_parsers() {
                     /* .thinking_forced_open = */ true,
                 }));
         assert_msg_equals(
-            {
-                /* .role = */ "assistant",
-                /* .content = */ "",
-                /* .content_parts = */ {},
-                /* .tool_calls = */ {},
-                /* .reasoning_content = */ "I need to remember the correct syntax. It starts with <｜tool▁calls▁begin｜> and ends with",
-                /* .tool_name = */ "",
-                /* .tool_call_id = */ ""
-            },
+            simple_assist_msg("", "I need to remember the correct syntax. It starts with <｜tool▁calls▁begin｜> and ends with"),
             common_chat_parse(
                 "I need to remember the correct syntax. It starts with <｜tool▁calls▁begin｜> and ends with",
                 /* is_partial= */ true,

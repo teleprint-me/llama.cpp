@@ -218,7 +218,7 @@ bool common_json_parse(
                 }
             } else if (err_loc.stack.back().type == COMMON_JSON_STACK_ELEMENT_OBJECT) {
                 if ((last_non_sp_char == '{' && can_parse(str + closing)) ||
-                        (last_non_sp_char == ',' && can_parse(str + "1" + closing))) {
+                        (last_non_sp_char == ',' && can_parse(str + "\"\": 1" + closing))) {
                     // Was about to create an object key+value
                     str += (out.healing_marker.json_dump_marker = "\"" + magic_seed) + "\": 1" + closing;
                 } else if (!was_maybe_number() && can_parse(str + ",\"\": 1" + closing)) {
