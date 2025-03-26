@@ -836,6 +836,11 @@ struct server_task_result_cmpl_final : server_task_result {
             deltas.back().push_back({"timings", timings.to_json()});
         }
 
+        // extra fields for debugging purposes
+        if (verbose && !deltas.empty()) {
+            deltas.front()["__verbose"] = to_json_non_oaicompat();
+        }
+
         return deltas;
     }
 };
