@@ -121,10 +121,6 @@ struct common_grammar_trigger {
     common_grammar_trigger_type type;
     std::string value;
     llama_token token = LLAMA_TOKEN_NULL;
-
-    // T can only be nlohmann::ordered_json
-    template <class T> T to_json() const;
-    template <class T> static common_grammar_trigger from_json(const T & in);
 };
 
 // sampling parameters
@@ -283,6 +279,7 @@ struct common_params {
     std::vector<std::string> in_files;   // all input files
     std::vector<std::string> antiprompt; // strings upon which more user input is prompted (a.k.a. reverse prompts)
     std::vector<llama_model_kv_override> kv_overrides;
+    std::vector<llama_model_tensor_buft_override> tensor_buft_overrides;
 
     bool lora_init_without_apply = false; // only load lora to memory, but do not apply it to ctx (user can manually apply lora later using llama_adapter_lora_apply)
     std::vector<common_adapter_lora_info> lora_adapters; // lora adapter path with user defined scale

@@ -134,7 +134,8 @@ struct slot_params {
 
         auto grammar_triggers = json::array();
         for (const auto & trigger : sampling.grammar_triggers) {
-            grammar_triggers.push_back(trigger.to_json<json>());
+            server_grammar_trigger ct(std::move(trigger));
+            grammar_triggers.push_back(ct.to_json());
         }
 
         return json {
@@ -379,9 +380,9 @@ struct server_task {
             const auto grammar_triggers = data.find("grammar_triggers");
             if (grammar_triggers != data.end()) {
                 for (const auto & t : *grammar_triggers) {
-                    auto ct = common_grammar_trigger::from_json(t);
-                    if (ct.type == COMMON_GRAMMAR_TRIGGER_TYPE_WORD) {
-                        const auto & word = ct.value;
+                    server_grammar_trigger ct(t);
+                    if (ct.value.type == COMMON_GRAMMAR_TRIGGER_TYPE_WORD) {
+                        const auto & word = ct.value.value;
                         auto ids = common_tokenize(vocab, word, /* add_special= */ false, /* parse_special= */ true);
                         if (ids.size() == 1) {
                             auto token = ids[0];
@@ -399,14 +400,14 @@ struct server_task {
                             params.sampling.grammar_triggers.push_back({COMMON_GRAMMAR_TRIGGER_TYPE_WORD, word});
                         }
                     } else {
-                        if (ct.type == COMMON_GRAMMAR_TRIGGER_TYPE_PATTERN) {
-                            SRV_DBG("Grammar trigger pattern: `%s`\n", ct.value.c_str());
-                        } else if (ct.type == COMMON_GRAMMAR_TRIGGER_TYPE_PATTERN_FULL) {
-                            SRV_DBG("Grammar trigger pattern full: `%s`\n", ct.value.c_str());
+                        if (ct.value.type == COMMON_GRAMMAR_TRIGGER_TYPE_PATTERN) {
+                            SRV_DBG("Grammar trigger pattern: `%s`\n", ct.value.value.c_str());
+                        } else if (ct.value.type == COMMON_GRAMMAR_TRIGGER_TYPE_PATTERN_FULL) {
+                            SRV_DBG("Grammar trigger pattern full: `%s`\n", ct.value.value.c_str());
                         } else {
                             throw std::runtime_error("Unknown grammar trigger type");
                         }
-                        params.sampling.grammar_triggers.push_back(ct);
+                        params.sampling.grammar_triggers.emplace_back(std::move(ct.value));
                     }
                 }
             }
