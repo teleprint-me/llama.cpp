@@ -1,5 +1,6 @@
 //  Tests common_regex (esp. its partial final matches support).
 
+#include "common.h"
 #include "regex-partial.h"
 
 #include <sstream>
@@ -24,6 +25,18 @@ struct test_case {
     std::vector<input_output> inputs_outputs;
 };
 
+static std::string common_regex_match_type_name(common_regex_match_type type) {
+    switch (type) {
+        case COMMON_REGEX_MATCH_TYPE_NONE:
+            return "COMMON_REGEX_MATCH_TYPE_NONE";
+        case COMMON_REGEX_MATCH_TYPE_PARTIAL:
+            return "COMMON_REGEX_MATCH_TYPE_PARTIAL";
+        case COMMON_REGEX_MATCH_TYPE_FULL:
+            return "COMMON_REGEX_MATCH_TYPE_FULL";
+    }
+    return "?";
+}
+
 static void test_regex() {
     printf("[%s]\n", __func__);
     auto test = [](const test_case & test_case) {
@@ -40,7 +53,11 @@ static void test_regex() {
                         ss << "<no match>";
                     } else {
                         GGML_ASSERT(!input_output.output.groups.empty());
-                        ss << "begin = " << input_output.output.groups[0].begin << ", end =" << input_output.output.groups[0].end << ", type = " << (m->type == COMMON_REGEX_MATCH_TYPE_PARTIAL ? "partial" : m->type == COMMON_REGEX_MATCH_TYPE_FULL ? "full" : "none") << ", groups.length = " << m->groups.size();
+                        std::vector<std::string> parts;
+                        for (const auto & g : m->groups) {
+                            parts.push_back("{" + std::to_string(g.begin) + ", " + std::to_string(g.end) + "}");
+                        }
+                        ss << "{" << common_regex_match_type_name(m->type) << ", {" << string_join(parts, ", ") << "}}";
                     }
                     return ss.str();
                 };
@@ -149,6 +166,65 @@ static void test_regex() {
             {"", {}},
         }
     });
+
+    test({
+        "(?:abc)?\\s*def",
+        {
+            {"ab", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 2}}}},
+            {"abc", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 3}}}},
+            {"abc ", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 4}}}},
+            {"abc d", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 5}}}},
+            {"abc de", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 6}}}},
+            {"abc def", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 7}}}},
+            {"abc defg", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 7}}}},
+            {"abc defgh", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 7}}}},
+            {"abcde", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 5}}}}, 
+            {"abcdefgh", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 6}}}},
+            {" d", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 2}}}},
+            {"def", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 3}}}},
+        }
+    });
+
+    test({
+        "a+b",
+        {
+            {"aaab", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 4}}}},
+            {"aaa", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 3}}}},
+            {"ab", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 2}}}},
+        }
+    });
+
+    test({
+        "(?:"
+            "(```(?:xml|json)?\\n\\s*)?" // match 1 (block_start)
+            "("                          // match 2 (open_tag)
+                "<tool_call>"
+                "|<function_call>"
+                "|<tool>"
+                "|<tools>"
+                "|<response>"
+                "|<json>"
+                "|<xml>"
+                "|<JSON>"
+            ")?"
+            "(\\s*\\{\\s*\"name\"\\s*:)" // match 3 (named tool call)
+        ")"
+        "|<function=([^>]+)>"            // match 4 (function name)
+        "|<function name=\"([^\"]+)\">", // match 5 (function name again)
+        {
+            {"{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 8}, {54, 54}, {54, 54}, {0, 8}, {54, 54}, {54, 54}}}},
+            {"<tool_call> {\"name", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 18}}}},
+            {"<tool_call>{\"name", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 17}}}},
+            {"Ok then<tool_call>{\"name", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{7, 24}}}},
+            {"{\"name", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 6}}}},
+            {"Ok then{\"name", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{7, 13}}}},
+            {"<tool_call> {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 20}, {66, 66}, {0, 11}, {11, 20}, {66, 66}, {66, 66}}}},
+            {"<function_call> {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 24}, {70, 70}, {0, 15}, {15, 24}, {70, 70}, {70, 70}}}},
+            {"<function name=\"special_function\"> {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 34}, {89, 89}, {89, 89}, {89, 89}, {89, 89}, {16, 32}}}},
+            {"<function=all>", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 14}, {14, 14}, {14, 14}, {14, 14}, {10, 13}, {14, 14}}}},
+            
+        }
+    });
 }
 
 static void test_regex_to_reversed_partial_regex() {
@@ -158,7 +234,7 @@ static void test_regex_to_reversed_partial_regex() {
         regex_to_reversed_partial_regex("a+"));
 
     assert_equals<std::string>(
-        "(a*?).*",
+        "(a*).*",
         regex_to_reversed_partial_regex("a*"));
 
     assert_equals<std::string>(
@@ -180,13 +256,13 @@ static void test_regex_to_reversed_partial_regex() {
         "((?:(?:(?:d)?c)?b)?a).*",
         regex_to_reversed_partial_regex("abcd"));
     assert_equals<std::string>(
-        "((?:b)?a*?).*", // TODO: ((?:b)?a*+).* ??
+        "((?:b)?a*).*", // TODO: ((?:b)?a*+).* ??
         regex_to_reversed_partial_regex("a*b"));
     assert_equals<std::string>(
         "((?:(?:b)?a)?.*).*",
         regex_to_reversed_partial_regex(".*?ab"));
     assert_equals<std::string>(
-        "((?:(?:b)?.*?)?a).*",
+        "((?:(?:b)?.*)?a).*",
         regex_to_reversed_partial_regex("a.*?b"));
     assert_equals<std::string>(
         "((?:(?:d)?(?:(?:c)?b))?a).*",

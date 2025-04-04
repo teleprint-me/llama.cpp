@@ -104,13 +104,6 @@ std::string regex_to_reversed_partial_regex(const std::string &pattern) {
                 if (is_star) {
                     if (*it == '?') {
                         ++it;
-                        // Convert initial reluctant quantifier to greedy to match as early as possible
-                        if (sequence->size() > 1) {
-                            sequence->back() += '?';
-                        }
-                    } else {
-                        // Convert greedy quantifiers to reluctant to not miss any matches
-                        sequence->back() += '?';
                     }
                 }
             } else if (*it == '{') {
