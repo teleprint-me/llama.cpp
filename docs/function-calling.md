@@ -325,6 +325,9 @@ To get the official template from original HuggingFace repos, you can use [scrip
 > [!TIP]
 > If there is no official `tool_use` Jinja template, you may want to set `--chat-template chatml` to use a default that works with many models (YMMV!), or write your own (e.g. we provide a custom [llama-cpp-deepseek-r1.jinja](../models/templates/llama-cpp-deepseek-r1.jinja) for DeepSeek R1 distills)
 
+> [!CAUTION]
+> Beware of extreme KV quantizations (e.g. `-ctk q4_0`), they can substantially degrade the model's tool calling performance.
+
 Test in CLI (or with any library / software that can use OpenAI-compatible API backends):
 
 ```bash
@@ -370,14 +373,14 @@ curl http://localhost:8080/v1/chat/completions -d '{
             "name":"get_current_weather",
             "description":"Get the current weather in a given location",
             "parameters":{
-            "type":"object",
-            "properties":{
-                "location":{
-                "type":"string",
-                "description":"The city and country/state, e.g. `San Francisco, CA`, or `Paris, France`"
-                }
-            },
-            "required":["location"]
+                "type":"object",
+                "properties":{
+                    "location":{
+                        "type":"string",
+                        "description":"The city and country/state, e.g. `San Francisco, CA`, or `Paris, France`"
+                    }
+                },
+                "required":["location"]
             }
         }
     }]
