@@ -178,7 +178,7 @@ static void test_regex() {
             {"abc def", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 7}}}},
             {"abc defg", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 7}}}},
             {"abc defgh", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 7}}}},
-            {"abcde", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 5}}}}, 
+            {"abcde", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 5}}}},
             {"abcdefgh", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 6}}}},
             {" d", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 2}}}},
             {"def", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 3}}}},
@@ -223,7 +223,7 @@ static void test_regex() {
             {"<function_call> {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 24}, {70, 70}, {0, 15}, {15, 24}, {70, 70}, {70, 70}}}},
             {"<function name=\"special_function\"> {\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 34}, {89, 89}, {89, 89}, {89, 89}, {89, 89}, {16, 32}}}},
             {"<function=all>", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 14}, {14, 14}, {14, 14}, {14, 14}, {10, 13}, {14, 14}}}},
-            
+
         }
     });
 }
