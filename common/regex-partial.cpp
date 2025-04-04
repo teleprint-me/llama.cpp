@@ -60,7 +60,6 @@ common_regex_match common_regex::search(const std::string & input, size_t pos, b
   - /a*b/ -> ((?:b)?a*+).* (final repetitions become eager)
   - /.*?ab/ -> ((?:b)?a).* (merge .*)
   - /a.*?b/ -> ((?:b)?.*?a).* (keep reluctant matches)
-  - /a.*b/ ->  ((?:b)?.*?a).* (in fact any repetition becomes a reluctant match!)
   - /a(bc)d/ -> ((?:(?:d)?(?:(?:c)?b))?a).*
   - /a(bc|de)/ -> ((?:(?:(?:e)?d)?|(?:(?:c)?b)?)?a).*
   - /ab{2,4}c/ -> abbb?b?c -> ((?:(?:(?:(?:(?:c)?b)?b)?b?)?b?)?a).*
@@ -200,5 +199,5 @@ std::string regex_to_reversed_partial_regex(const std::string &pattern) {
         throw std::runtime_error("Unmatched '(' in pattern");
     }
 
-    return "(" + res + ").*";
+    return "(" + res + ")[\\s\\S]*";
 }

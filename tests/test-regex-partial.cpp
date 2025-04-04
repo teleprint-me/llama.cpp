@@ -215,6 +215,7 @@ static void test_regex() {
             {"{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}", {COMMON_REGEX_MATCH_TYPE_FULL, {{0, 8}, {54, 54}, {54, 54}, {0, 8}, {54, 54}, {54, 54}}}},
             {"<tool_call> {\"name", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 18}}}},
             {"<tool_call>{\"name", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 17}}}},
+            {"Let's call something\n<tool_call>{\"name", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{21, 38}}}},
             {"Ok then<tool_call>{\"name", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{7, 24}}}},
             {"{\"name", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{0, 6}}}},
             {"Ok then{\"name", {COMMON_REGEX_MATCH_TYPE_PARTIAL, {{7, 13}}}},
@@ -230,48 +231,48 @@ static void test_regex() {
 static void test_regex_to_reversed_partial_regex() {
     printf("[%s]\n", __func__);
     assert_equals<std::string>(
-        "(a+).*",
+        "(a+)[\\s\\S]*",
         regex_to_reversed_partial_regex("a+"));
 
     assert_equals<std::string>(
-        "(a*).*",
+        "(a*)[\\s\\S]*",
         regex_to_reversed_partial_regex("a*"));
 
     assert_equals<std::string>(
-        "(a?).*",
+        "(a?)[\\s\\S]*",
         regex_to_reversed_partial_regex("a?"));
 
     assert_equals<std::string>(
-        "([a-z]).*",
+        "([a-z])[\\s\\S]*",
         regex_to_reversed_partial_regex("[a-z]"));
 
     assert_equals<std::string>(
-        "((?:\\w+)?[a-z]).*",
+        "((?:\\w+)?[a-z])[\\s\\S]*",
         regex_to_reversed_partial_regex("[a-z]\\w+"));
 
     assert_equals<std::string>(
-        "((?:a|b)).*",
+        "((?:a|b))[\\s\\S]*",
         regex_to_reversed_partial_regex("(?:a|b)"));
     assert_equals<std::string>(
-        "((?:(?:(?:d)?c)?b)?a).*",
+        "((?:(?:(?:d)?c)?b)?a)[\\s\\S]*",
         regex_to_reversed_partial_regex("abcd"));
     assert_equals<std::string>(
-        "((?:b)?a*).*", // TODO: ((?:b)?a*+).* ??
+        "((?:b)?a*)[\\s\\S]*", // TODO: ((?:b)?a*+).* ??
         regex_to_reversed_partial_regex("a*b"));
     assert_equals<std::string>(
-        "((?:(?:b)?a)?.*).*",
+        "((?:(?:b)?a)?.*)[\\s\\S]*",
         regex_to_reversed_partial_regex(".*?ab"));
     assert_equals<std::string>(
-        "((?:(?:b)?.*)?a).*",
+        "((?:(?:b)?.*)?a)[\\s\\S]*",
         regex_to_reversed_partial_regex("a.*?b"));
     assert_equals<std::string>(
-        "((?:(?:d)?(?:(?:c)?b))?a).*",
+        "((?:(?:d)?(?:(?:c)?b))?a)[\\s\\S]*",
         regex_to_reversed_partial_regex("a(bc)d"));
     assert_equals<std::string>(
-        "((?:(?:(?:c)?b|(?:e)?d))?a).*",
+        "((?:(?:(?:c)?b|(?:e)?d))?a)[\\s\\S]*",
         regex_to_reversed_partial_regex("a(bc|de)"));
     assert_equals<std::string>(
-        "((?:(?:(?:(?:(?:c)?b?)?b?)?b)?b)?a).*",
+        "((?:(?:(?:(?:(?:c)?b?)?b?)?b)?b)?a)[\\s\\S]*",
         regex_to_reversed_partial_regex("ab{2,4}c"));
 }
 
