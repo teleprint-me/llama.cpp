@@ -772,6 +772,30 @@ static void test_template_output_parsers() {
                 "<function_call> { \"name\" : \"python\"",
                 /* is_partial= */ true,
                 {COMMON_CHAT_FORMAT_HERMES_2_PRO}));
+        assert_msg_equals(
+            simple_assist_msg("Let's call something\n"),
+            common_chat_parse(
+                "Let's call something\n"
+                "<tool_call>{\"name\"",
+                /* is_partial= */ true,
+                {
+                    /* .format = */ COMMON_CHAT_FORMAT_HERMES_2_PRO,
+                    /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
+                    /* .reasoning_in_content = */ false,
+                    /* .thinking_forced_open = */ false,
+                }));
+        assert_msg_equals(
+            simple_assist_msg(""),
+            common_chat_parse(
+                "Let's call something\n"
+                "<tool_call>{\"name",
+                /* is_partial= */ true,
+                {
+                    /* .format = */ COMMON_CHAT_FORMAT_HERMES_2_PRO,
+                    /* .reasoning_format = */ COMMON_REASONING_FORMAT_DEEPSEEK,
+                    /* .reasoning_in_content = */ false,
+                    /* .thinking_forced_open = */ false,
+                }));
         assert_msg_equals(message_assist_call_thoughts,
             common_chat_parse(
                 // QwQ-32B's template adds a trailing <think> if add_generation_prompt
@@ -930,8 +954,10 @@ static void test_template_output_parsers() {
 
         assert_msg_equals(
             simple_assist_msg(
-                "This is not a tool call:\n"
-                "{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}"),
+                "This is not a tool call:",
+                "",
+                "special_function",
+                "{\"arg1\": 1}"),
             common_chat_parse(
                 "This is not a tool call:\n"
                 "{\"name\": \"special_function\", \"arguments\": {\"arg1\": 1}}",

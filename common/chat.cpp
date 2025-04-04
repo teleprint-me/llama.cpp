@@ -1449,6 +1449,7 @@ static common_chat_params common_chat_params_init_hermes_2_pro(const common_chat
     data.grammar = build_grammar([&](const common_grammar_builder & builder) {
         std::vector<std::string> tool_rules;
         std::vector<std::string> tool_call_alts;
+        std::vector<std::string> escaped_names;
         foreach_function(inputs.tools, [&](const json & tool) {
             const auto & function = tool.at("function");
             std::string name = function.at("name");
@@ -1477,6 +1478,7 @@ static common_chat_params common_chat_params_init_hermes_2_pro(const common_chat
                 COMMON_GRAMMAR_TRIGGER_TYPE_PATTERN,
                 "<function\\s+name\\s*=\\s*\"" + escaped_name + "\"",
             });
+            escaped_names.push_back(escaped_name);
         });
         auto any_tool_call = builder.add_rule("any_tool_call", "( " + string_join(tool_rules, " | ") + " ) space");
         std::vector<std::string> alt_tags {
@@ -1504,9 +1506,12 @@ static common_chat_params common_chat_params_init_hermes_2_pro(const common_chat
             // If thinking_forced_open, then we capture the </think> tag in the grammar,
             // (important for required tool choice) and in the trigger's first capture (decides what is sent to the grammar)
             std::string(data.thinking_forced_open ? "[\\s\\S]*?(</think>\\s*)" : "(?:<think>[\\s\\S]*?</think>\\s*)?") + (
-                "(<tool_call>"
+                "(\\s*"
+                "(?:<tool_call>"
                 "|<function"
-                "|(?:```(?:json|xml)?\n\\s*)?(?:<function_call>|<tools>|<xml><json>|<response>)?\\s*\\{\\s*\""
+                "|(?:```(?:json|xml)?\n\\s*)?(?:<function_call>|<tools>|<xml><json>|<response>)?"
+                 "\\s*\\{\\s*\"name\"\\s*:\\s*\"(?:" + string_join(escaped_names, "|") + ")\""
+                ")"
                 ")[\\s\\S]*"
             ),
         });
@@ -1550,20 +1555,13 @@ static void common_chat_parse_hermes_2_pro(common_chat_msg_parser & builder) {
                 "|<xml>"
                 "|<JSON>"
             ")?"
-            "(\\s*\\{\\s*\"name\"\\s*:)" // match 3 (named tool call)
+            "(\\s*\\{\\s*\"name\")" // match 3 (named tool call)
         ")"
         "|<function=([^>]+)>"            // match 4 (function name)
         "|<function name=\"([^\"]+)\">"  // match 5 (function name again)
     );
 
-    auto start = builder.pos();
     if (auto res = builder.try_find_regex(open_regex)) {
-        if (res->groups[0].begin != start && builder.str(res->groups[2]) != "<tool_call>" &&  res->groups[4].empty() && res->groups[5].empty()) {
-            // The only syntaxes we allow after the very start are <tool_call>, <function=...> or <function name=...>
-            builder.move_to(start);
-            builder.add_content(builder.consume_rest());
-            return;
-        }
         builder.add_content(res->prelude);
 
         const auto & block_start = res->groups[1];
