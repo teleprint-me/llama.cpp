@@ -122,6 +122,7 @@ struct common_chat_templates_inputs {
     common_chat_tool_choice tool_choice = COMMON_CHAT_TOOL_CHOICE_AUTO;
     bool parallel_tool_calls = false;
     common_reasoning_format reasoning_format = COMMON_REASONING_FORMAT_NONE;
+    std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
 };
 
 struct common_chat_params {
