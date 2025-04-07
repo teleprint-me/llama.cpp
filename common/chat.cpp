@@ -1092,17 +1092,19 @@ static common_chat_params common_chat_params_init_llama_3_x(const common_chat_te
             }
             // Allow a few empty lines on top of the usual constrained json schema space rule.
             builder.add_rule("root", string_join(tool_rules, " | "));
+            data.additional_stops.push_back("<|eom_id|>");
         });
-        data.additional_stops.push_back("<|eom_id|>");
+        data.format = allow_python_tag_builtin_tools && !builtin_tools.empty()
+            ? COMMON_CHAT_FORMAT_LLAMA_3_X_WITH_BUILTIN_TOOLS
+            : COMMON_CHAT_FORMAT_LLAMA_3_X;
+    } else {
+        data.format = COMMON_CHAT_FORMAT_CONTENT_ONLY;
     }
     data.prompt = apply(tmpl, inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt, {
         {"date_string", format_time(inputs.now, "%d %b %Y")},
         {"tools_in_user_message", false},
         {"builtin_tools", builtin_tools.empty() ? json() : builtin_tools},
     });
-    data.format = allow_python_tag_builtin_tools && !builtin_tools.empty()
-        ? COMMON_CHAT_FORMAT_LLAMA_3_X_WITH_BUILTIN_TOOLS
-        : COMMON_CHAT_FORMAT_LLAMA_3_X;
     return data;
 }
 static void common_chat_parse_llama_3_1(common_chat_msg_parser & builder, bool with_builtin_tools = false) {
@@ -1375,55 +1377,60 @@ static void common_chat_parse_functionary_v3_2(common_chat_msg_parser & builder)
 static common_chat_params common_chat_params_init_functionary_v3_1_llama_3_1(const common_chat_template & tmpl, const struct templates_params & inputs) {
     // https://github.com/MeetKai/functionary/blob/main/tests/prompt_test_v3-llama3.1.txt
     common_chat_params data;
-    json tools = inputs.tools.is_null() ? inputs.tools : json::array();
-    std::string python_code_argument_name;
-    auto has_raw_python = false;
 
-    data.grammar_lazy = inputs.tool_choice != COMMON_CHAT_TOOL_CHOICE_REQUIRED;
-    data.grammar = build_grammar([&](const common_grammar_builder & builder) {
-        std::vector<std::string> tool_rules;
-        foreach_function(inputs.tools, [&](const json & tool) {
-            const auto & function = tool.at("function");
-            const auto & parameters = function.at("parameters");
-            std::string name = function.at("name");
-            if (name == "python" || name == "ipython") {
-                if (!parameters.contains("type")) {
-                    throw std::runtime_error("Missing type in python tool");
-                }
-                has_raw_python = true;
-                const auto & type = parameters.at("type");
-                if (type == "object") {
-                    auto properties = parameters.at("properties");
-                    for (auto it = properties.begin(); it != properties.end(); ++it) {
-                        if (it.value().at("type") == "string") {
-                            if (!python_code_argument_name.empty()) {
-                                throw std::runtime_error("Multiple string arguments found in python tool");
+    if (!inputs.tools.is_null()) {
+        json tools = inputs.tools.is_null() ? inputs.tools : json::array();
+        std::string python_code_argument_name;
+        auto has_raw_python = false;
+
+        data.grammar_lazy = inputs.tool_choice != COMMON_CHAT_TOOL_CHOICE_REQUIRED;
+        data.grammar = build_grammar([&](const common_grammar_builder & builder) {
+            std::vector<std::string> tool_rules;
+            foreach_function(inputs.tools, [&](const json & tool) {
+                const auto & function = tool.at("function");
+                const auto & parameters = function.at("parameters");
+                std::string name = function.at("name");
+                if (name == "python" || name == "ipython") {
+                    if (!parameters.contains("type")) {
+                        throw std::runtime_error("Missing type in python tool");
+                    }
+                    has_raw_python = true;
+                    const auto & type = parameters.at("type");
+                    if (type == "object") {
+                        auto properties = parameters.at("properties");
+                        for (auto it = properties.begin(); it != properties.end(); ++it) {
+                            if (it.value().at("type") == "string") {
+                                if (!python_code_argument_name.empty()) {
+                                    throw std::runtime_error("Multiple string arguments found in python tool");
+                                }
+                                python_code_argument_name = it.key();
                             }
-                            python_code_argument_name = it.key();
                         }
+                        if (python_code_argument_name.empty()) {
+                            throw std::runtime_error("No string argument found in python tool");
+                        }
+                    } else if (type != "string") {
+                        throw std::runtime_error("Invalid type in python tool: " + type.dump());
                     }
-                    if (python_code_argument_name.empty()) {
-                        throw std::runtime_error("No string argument found in python tool");
-                    }
-                } else if (type != "string") {
-                    throw std::runtime_error("Invalid type in python tool: " + type.dump());
                 }
+                tool_rules.push_back(builder.add_rule(name + "-call", "\"<function=" + name + ">\" " + builder.add_schema(name + "-args", parameters) + " \"</function>\" space"));
+            });
+            if (has_raw_python) {
+                tool_rules.push_back(builder.add_rule("python-call", "\"<|python_tag|>\" .*"));
+                data.grammar_triggers.push_back({COMMON_GRAMMAR_TRIGGER_TYPE_WORD, "<|python_tag|>"});
+                data.preserved_tokens.push_back("<|python_tag|>");
             }
-            tool_rules.push_back(builder.add_rule(name + "-call", "\"<function=" + name + ">\" " + builder.add_schema(name + "-args", parameters) + " \"</function>\" space"));
+            auto tool_call = builder.add_rule("tool_call", string_join(tool_rules, " | ")) + " space";
+            builder.add_rule("root", inputs.parallel_tool_calls ? "(" + tool_call + ")+" : tool_call);
+            data.grammar_triggers.push_back({COMMON_GRAMMAR_TRIGGER_TYPE_WORD, "<function="});
         });
-        if (has_raw_python) {
-            tool_rules.push_back(builder.add_rule("python-call", "\"<|python_tag|>\" .*"));
-            data.grammar_triggers.push_back({COMMON_GRAMMAR_TRIGGER_TYPE_WORD, "<|python_tag|>"});
-            data.preserved_tokens.push_back("<|python_tag|>");
-        }
-        auto tool_call = builder.add_rule("tool_call", string_join(tool_rules, " | ")) + " space";
-        builder.add_rule("root", inputs.parallel_tool_calls ? "(" + tool_call + ")+" : tool_call);
-        data.grammar_triggers.push_back({COMMON_GRAMMAR_TRIGGER_TYPE_WORD, "<function="});
-    });
+        data.format = COMMON_CHAT_FORMAT_FUNCTIONARY_V3_1_LLAMA_3_1;
+    } else {
+        data.format = COMMON_CHAT_FORMAT_CONTENT_ONLY;
+    }
 
     data.prompt = apply(tmpl, inputs.messages, inputs.tools.empty() ? json() : inputs.tools, inputs.add_generation_prompt);
     // TODO: if (has_raw_python)
-    data.format = COMMON_CHAT_FORMAT_FUNCTIONARY_V3_1_LLAMA_3_1;
     return data;
 }
 static void common_chat_parse_functionary_v3_1_llama_3_1(common_chat_msg_parser & builder) {
@@ -1714,6 +1721,12 @@ static common_chat_params common_chat_templates_apply_jinja(
         return common_chat_params_init_firefunction_v2(tmpl, params);
     }
 
+    // Functionary v3.1 (w/ tools)
+    if (src.find("<|start_header_id|>") != std::string::npos
+        && src.find("<function=") != std::string::npos) {
+        return common_chat_params_init_functionary_v3_1_llama_3_1(tmpl, params);
+    }
+
     // Llama 3.1, 3.2, 3.3 (also requires date_string so using it even w/o tools)
     if (src.find("<|start_header_id|>ipython<|end_header_id|>") != std::string::npos) {
         auto allow_python_tag_builtin_tools = src.find("<|python_tag|>") != std::string::npos;
@@ -1723,12 +1736,6 @@ static common_chat_params common_chat_templates_apply_jinja(
     // Plain handler (no tools)
     if (params.tools.is_null() || inputs.tool_choice == COMMON_CHAT_TOOL_CHOICE_NONE) {
         return common_chat_params_init_without_tools(tmpl, params);
-    }
-
-    // Functionary v3.1 (w/ tools)
-    if (src.find("<|start_header_id|>") != std::string::npos
-        && src.find("<function=") != std::string::npos) {
-        return common_chat_params_init_functionary_v3_1_llama_3_1(tmpl, params);
     }
 
     // Mistral Nemo (w/ tools)

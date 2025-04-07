@@ -1051,6 +1051,8 @@ static void test_template_output_parsers() {
         std::vector<std::string>   end_tokens{ "<|eom_id|>", "<|eot_id|>" };
 
         assert_equals(COMMON_CHAT_FORMAT_LLAMA_3_X, common_chat_templates_apply(tmpls.get(), inputs_tools).format);
+        assert_equals(COMMON_CHAT_FORMAT_CONTENT_ONLY,
+                        common_chat_templates_apply(tmpls.get(), inputs_no_tools).format);
 
         test_templates(tmpls.get(), end_tokens, message_assist, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
         test_templates(tmpls.get(), end_tokens, message_assist_call, tools,
@@ -1061,7 +1063,9 @@ static void test_template_output_parsers() {
         std::vector<std::string>   end_tokens{ "<|eom_id|>", "<|eot_id|>" };
 
         assert_equals(COMMON_CHAT_FORMAT_FUNCTIONARY_V3_1_LLAMA_3_1,
-                      common_chat_templates_apply(tmpls.get(), inputs_tools).format);
+            common_chat_templates_apply(tmpls.get(), inputs_tools).format);
+        assert_equals(COMMON_CHAT_FORMAT_CONTENT_ONLY,
+                        common_chat_templates_apply(tmpls.get(), inputs_no_tools).format);
 
         for (auto is_partial : { false, true }) {
             assert_equals(
