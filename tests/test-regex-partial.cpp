@@ -230,6 +230,11 @@ static void test_regex() {
 
 static void test_regex_to_reversed_partial_regex() {
     printf("[%s]\n", __func__);
+
+    assert_equals<std::string>(
+        "((?:(?:c)?b)?a)[\\s\\S]*",
+        regex_to_reversed_partial_regex("abc"));
+
     assert_equals<std::string>(
         "(a+)[\\s\\S]*",
         regex_to_reversed_partial_regex("a+"));
