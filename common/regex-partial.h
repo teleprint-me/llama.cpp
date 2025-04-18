@@ -52,4 +52,4 @@ class common_regex {
 };
 
 // For testing only (pretty print of failures).
-std::string regex_to_reversed_partial_regex(const std::string &pattern);
+std::string regex_to_reversed_partial_regex(const std::string & pattern);
