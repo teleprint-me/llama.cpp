@@ -36,9 +36,10 @@ common_regex_match common_regex::search(const std::string & input, size_t pos, b
                 common_regex_match res;
                 res.type = COMMON_REGEX_MATCH_TYPE_PARTIAL;
                 const size_t begin = std::distance(input.begin(), it);
-                GGML_ASSERT(begin >= 0);
-                const size_t end = input.size();//begin + group.length();
-                GGML_ASSERT(begin <= end);
+                const size_t end = input.size();
+                if (begin == std::string::npos || end == std::string::npos || begin > end) {
+                    throw std::runtime_error("Invalid range");
+                }
                 res.groups.push_back({begin, end});
                 return res;
             }
