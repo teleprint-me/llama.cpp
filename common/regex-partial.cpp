@@ -67,7 +67,7 @@ common_regex_match common_regex::search(const std::string & input, size_t pos, b
   The regex will match a reversed string fully, and the end of the first (And only) capturing group will indicate the reversed start of the original partial pattern
   (i.e. just where the final .* starts in the inverted pattern; all other groups are turned into non-capturing groups, and reluctant quantifiers are ignored)
 */
-std::string regex_to_reversed_partial_regex(const std::string &pattern) {
+std::string regex_to_reversed_partial_regex(const std::string & pattern) {
     auto it = pattern.begin();
     const auto end = pattern.end();
 
