@@ -2,7 +2,6 @@
 
 #include <regex>
 #include <string>
-#include "ggml.h"
 
 enum common_regex_match_type {
     COMMON_REGEX_MATCH_TYPE_NONE,
@@ -14,7 +13,9 @@ struct common_string_range {
     size_t begin;
     size_t end;
     common_string_range(size_t begin, size_t end) : begin(begin), end(end) {
-        GGML_ASSERT(begin <= end);
+        if (begin > end) {
+            throw std::runtime_error("Invalid range");
+        }
     }
     // prevent default ctor
     common_string_range() = delete;
