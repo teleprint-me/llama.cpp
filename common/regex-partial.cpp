@@ -35,11 +35,11 @@ common_regex_match common_regex::search(const std::string & input, size_t pos, b
             if ((!as_match) || it == input.begin()) {
                 common_regex_match res;
                 res.type = COMMON_REGEX_MATCH_TYPE_PARTIAL;
-                auto begin = std::distance(input.begin(), it);
+                const size_t begin = std::distance(input.begin(), it);
                 GGML_ASSERT(begin >= 0);
-                auto end = input.size();//begin + group.length();
-                GGML_ASSERT(static_cast<size_t>(begin) <= end);
-                res.groups.push_back({static_cast<size_t>(begin), end});
+                const size_t end = input.size();//begin + group.length();
+                GGML_ASSERT(begin <= end);
+                res.groups.push_back(begin, end});
                 return res;
             }
         }
