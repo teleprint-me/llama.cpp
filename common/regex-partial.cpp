@@ -39,7 +39,7 @@ common_regex_match common_regex::search(const std::string & input, size_t pos, b
                 GGML_ASSERT(begin >= 0);
                 const size_t end = input.size();//begin + group.length();
                 GGML_ASSERT(begin <= end);
-                res.groups.push_back(begin, end});
+                res.groups.push_back({begin, end});
                 return res;
             }
         }
@@ -80,9 +80,9 @@ std::string regex_to_reversed_partial_regex(const std::string & pattern) {
                 auto start = it;
                 ++it;
                 while (it != end) {
-                    if (*it == '\\' && (++it != end)) {
+                    if ((*it == '\\') && (++it != end)) {
                         ++it;
-                    } else if (*it == ']') {
+                    } else if ((it != end) && (*it == ']')) {
                         break;
                     } else {
                         ++it;
@@ -170,7 +170,7 @@ std::string regex_to_reversed_partial_regex(const std::string & pattern) {
                 auto str = std::string("\\") + *it;
                 sequence->push_back(str);
                 ++it;
-            } else {
+            } else if (it != end) {
                 sequence->push_back(std::string(1, *it));
                 ++it;
             }
