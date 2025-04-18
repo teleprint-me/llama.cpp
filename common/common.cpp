@@ -447,7 +447,7 @@ bool string_ends_with(const std::string & str, const std::string & suffix) {
     return str.size() >= suffix.size() && str.compare(str.size()-suffix.size(), suffix.size(), suffix) == 0;
 }
 
-size_t string_find_partial_stop(const std::string &str, const std::string &stop) {
+size_t string_find_partial_stop(const std::string & str, const std::string & stop) {
     if (!str.empty() && !stop.empty()) {
         const char text_last_char = str.back();
         for (int64_t char_index = stop.size() - 1; char_index >= 0; char_index--) {
