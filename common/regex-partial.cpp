@@ -35,11 +35,12 @@ common_regex_match common_regex::search(const std::string & input, size_t pos, b
             if ((!as_match) || it == input.begin()) {
                 common_regex_match res;
                 res.type = COMMON_REGEX_MATCH_TYPE_PARTIAL;
-                auto begin = std::distance(input.begin(), it);
-                GGML_ASSERT(begin >= 0);
-                auto end = input.size();//begin + group.length();
-                GGML_ASSERT(static_cast<size_t>(begin) <= end);
-                res.groups.push_back({static_cast<size_t>(begin), end});
+                const size_t begin = std::distance(input.begin(), it);
+                const size_t end = input.size();
+                if (begin == std::string::npos || end == std::string::npos || begin > end) {
+                    throw std::runtime_error("Invalid range");
+                }
+                res.groups.push_back({begin, end});
                 return res;
             }
         }
@@ -67,7 +68,7 @@ common_regex_match common_regex::search(const std::string & input, size_t pos, b
   The regex will match a reversed string fully, and the end of the first (And only) capturing group will indicate the reversed start of the original partial pattern
   (i.e. just where the final .* starts in the inverted pattern; all other groups are turned into non-capturing groups, and reluctant quantifiers are ignored)
 */
-std::string regex_to_reversed_partial_regex(const std::string &pattern) {
+std::string regex_to_reversed_partial_regex(const std::string & pattern) {
     auto it = pattern.begin();
     const auto end = pattern.end();
 
@@ -80,9 +81,9 @@ std::string regex_to_reversed_partial_regex(const std::string &pattern) {
                 auto start = it;
                 ++it;
                 while (it != end) {
-                    if (*it == '\\' && (++it != end)) {
+                    if ((*it == '\\') && (++it != end)) {
                         ++it;
-                    } else if (*it == ']') {
+                    } else if ((it != end) && (*it == ']')) {
                         break;
                     } else {
                         ++it;
@@ -170,7 +171,7 @@ std::string regex_to_reversed_partial_regex(const std::string &pattern) {
                 auto str = std::string("\\") + *it;
                 sequence->push_back(str);
                 ++it;
-            } else {
+            } else if (it != end) {
                 sequence->push_back(std::string(1, *it));
                 ++it;
             }

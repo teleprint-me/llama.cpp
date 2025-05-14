@@ -11,9 +11,9 @@
 #include <string>
 
 #include "chat.h"
-#include "common.h"
-#include "llama-grammar.h"
-#include "unicode.h"
+
+#include "../src/unicode.h"
+#include "../src/llama-grammar.h"
 
 using json = nlohmann::ordered_json;
 
@@ -560,6 +560,7 @@ static void test_template_output_parsers() {
     {
         // Not supported yet
         auto tmpls = read_templates("models/templates/CohereForAI-c4ai-command-r-plus-tool_use.jinja");
+        assert_equals(COMMON_CHAT_FORMAT_CONTENT_ONLY, common_chat_templates_apply(tmpls.get(), inputs_no_tools).format);
         assert_equals(COMMON_CHAT_FORMAT_GENERIC, common_chat_templates_apply(tmpls.get(), inputs_tools).format);
     }
     {
@@ -736,21 +737,15 @@ static void test_template_output_parsers() {
         auto tmpls = read_templates("models/templates/Qwen-QwQ-32B.jinja");
         std::vector<std::string> end_tokens{ "<|im_end|>" };
 
-        for (const auto & inputs : { inputs_no_tools, inputs_tools }) {
-            auto params = common_chat_templates_apply(tmpls.get(), inputs);
-            assert_equals(COMMON_CHAT_FORMAT_HERMES_2_PRO, params.format);
-            assert_equals(true, params.thinking_forced_open);
-        }
+        assert_equals(COMMON_CHAT_FORMAT_CONTENT_ONLY, common_chat_templates_apply(tmpls.get(), inputs_no_tools).format);
+        assert_equals(COMMON_CHAT_FORMAT_HERMES_2_PRO, common_chat_templates_apply(tmpls.get(), inputs_tools).format);
     }
     {
         auto tmpls = read_templates("models/templates/NousResearch-Hermes-2-Pro-Llama-3-8B-tool_use.jinja");
         std::vector<std::string> end_tokens{ "<|im_end|>" };
 
-        for (const auto & inputs : { inputs_no_tools, inputs_tools }) {
-            auto params = common_chat_templates_apply(tmpls.get(), inputs);
-            assert_equals(COMMON_CHAT_FORMAT_HERMES_2_PRO, params.format);
-            assert_equals(false, params.thinking_forced_open);
-        }
+        assert_equals(COMMON_CHAT_FORMAT_CONTENT_ONLY, common_chat_templates_apply(tmpls.get(), inputs_no_tools).format);
+        assert_equals(COMMON_CHAT_FORMAT_HERMES_2_PRO, common_chat_templates_apply(tmpls.get(), inputs_tools).format);
         assert_equals(
             COMMON_CHAT_FORMAT_HERMES_2_PRO,
             common_chat_templates_apply(
@@ -1022,6 +1017,7 @@ static void test_template_output_parsers() {
         auto tmpls = read_templates("models/templates/meta-llama-Llama-3.1-8B-Instruct.jinja");
         std::vector<std::string>   end_tokens{ "<|eom_id|>", "<|eot_id|>" };
 
+        assert_equals(COMMON_CHAT_FORMAT_CONTENT_ONLY, common_chat_templates_apply(tmpls.get(), inputs_no_tools).format);
         assert_equals(COMMON_CHAT_FORMAT_LLAMA_3_X, common_chat_templates_apply(tmpls.get(), inputs_tools).format);
         assert_equals(COMMON_CHAT_FORMAT_LLAMA_3_X_WITH_BUILTIN_TOOLS,
                       common_chat_templates_apply(tmpls.get(), inputs_tools_builtin).format);
@@ -1051,8 +1047,7 @@ static void test_template_output_parsers() {
         std::vector<std::string>   end_tokens{ "<|eom_id|>", "<|eot_id|>" };
 
         assert_equals(COMMON_CHAT_FORMAT_LLAMA_3_X, common_chat_templates_apply(tmpls.get(), inputs_tools).format);
-        assert_equals(COMMON_CHAT_FORMAT_CONTENT_ONLY,
-                        common_chat_templates_apply(tmpls.get(), inputs_no_tools).format);
+        assert_equals(COMMON_CHAT_FORMAT_CONTENT_ONLY, common_chat_templates_apply(tmpls.get(), inputs_no_tools).format);
 
         test_templates(tmpls.get(), end_tokens, message_assist, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
         test_templates(tmpls.get(), end_tokens, message_assist_call, tools,
@@ -1062,6 +1057,8 @@ static void test_template_output_parsers() {
         auto tmpls = read_templates("models/templates/meetkai-functionary-medium-v3.1.jinja");
         std::vector<std::string>   end_tokens{ "<|eom_id|>", "<|eot_id|>" };
 
+        assert_equals(COMMON_CHAT_FORMAT_CONTENT_ONLY,
+                      common_chat_templates_apply(tmpls.get(), inputs_no_tools).format);
         assert_equals(COMMON_CHAT_FORMAT_FUNCTIONARY_V3_1_LLAMA_3_1,
             common_chat_templates_apply(tmpls.get(), inputs_tools).format);
         assert_equals(COMMON_CHAT_FORMAT_CONTENT_ONLY,
@@ -1141,6 +1138,7 @@ static void test_template_output_parsers() {
         auto tmpls = read_templates("models/templates/fireworks-ai-llama-3-firefunction-v2.jinja");
         std::vector<std::string>   end_tokens{ "<|eot_id|>" };
 
+        assert_equals(COMMON_CHAT_FORMAT_CONTENT_ONLY, common_chat_templates_apply(tmpls.get(), inputs_no_tools).format);
         assert_equals(COMMON_CHAT_FORMAT_FIREFUNCTION_V2, common_chat_templates_apply(tmpls.get(), inputs_tools).format);
 
         test_templates(tmpls.get(), end_tokens, message_assist, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
@@ -1237,6 +1235,7 @@ static void test_template_output_parsers() {
         auto tmpls = read_templates("models/templates/llama-cpp-deepseek-r1.jinja");
         std::vector<std::string>   end_tokens{ "<｜end▁of▁sentence｜>" };
 
+        assert_equals(COMMON_CHAT_FORMAT_DEEPSEEK_R1,                   common_chat_templates_apply(tmpls.get(), inputs_no_tools).format);
         assert_equals(COMMON_CHAT_FORMAT_DEEPSEEK_R1,                   common_chat_templates_apply(tmpls.get(), inputs_tools).format);
 
         test_templates(tmpls.get(), end_tokens, message_assist, tools, "Hello, world!\nWhat's up?", /* expect_grammar_triggered= */ false);
