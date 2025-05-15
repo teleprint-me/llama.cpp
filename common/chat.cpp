@@ -116,6 +116,15 @@ std::vector<common_chat_msg_diff> common_chat_msg_diff::compute_diffs(const comm
     return diffs;
 }
 
+static std::string format_time(const std::chrono::system_clock::time_point & now, const std::string & format) {
+    auto time = std::chrono::system_clock::to_time_t(now);
+    auto local_time = *std::localtime(&time);
+    std::ostringstream ss;
+    ss << std::put_time(&local_time, format.c_str());
+    auto res = ss.str();
+    return res;
+}
+
 typedef minja::chat_template common_chat_template;
 
 struct common_chat_templates {
@@ -1381,7 +1390,6 @@ static common_chat_params common_chat_params_init_functionary_v3_1_llama_3_1(con
     common_chat_params data;
 
     if (!inputs.tools.is_null()) {
-        json tools = inputs.tools.is_null() ? inputs.tools : json::array();
         std::string python_code_argument_name;
         auto has_raw_python = false;
 
